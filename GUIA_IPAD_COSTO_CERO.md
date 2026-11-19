@@ -1,5 +1,11 @@
 # Próxima etapa desde tu iPad — costo $0
 
+> Actualización: el propietario autorizó la prueba de `jarvismedina` y confirmó
+> Free. Ver [configuración específica](docs/NETLIFY_JARVISMEDINA_TRIAL.md).
+> El TOML ya registra esa aprobación solo en production y el candado exige la rama
+> `prep/private-personal-assistant`. Las instrucciones generales de bloqueo que
+> siguen se mantienen para proyectos y despliegues no autorizados.
+
 **Por ahora: revisar el Pull Request. No fusionar ni pulsar Deploy.**
 No se creó ningún servicio ni se activó facturación. Los pasos de alojamiento
 de abajo son para cuando autorices explícitamente el primer despliegue gratuito.

@@ -1,5 +1,9 @@
 # JARVIS privado — presupuesto obligatorio $0
 
+> Excepción autorizada: prueba de `jarvismedina`, solo en production y desde
+> `prep/private-personal-assistant`, con Free confirmado por el propietario.
+> Ver [desbloqueo y requisitos](docs/NETLIFY_JARVISMEDINA_TRIAL.md).
+
 La ruta vigente es **Netlify Free + Render Free**, sin publicar todavía.
 La configuración anterior de Vercel y planes pagos quedó archivada en
 `docs/historical/PRIVACIDAD_VERCEL.md`; no es la recomendación actual.

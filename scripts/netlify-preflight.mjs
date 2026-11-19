@@ -1,17 +1,32 @@
 // This gate checks local configuration, not the billing status of a Netlify account.
 // It never calls a provider or deploys anything.
+// RESEARCH: Netlify's documented SITE_NAME, BRANCH, CONTEXT and ignore exit codes.
+// DECISION: Retain the existing gate, with a project-scoped trial and precise errors.
 import { fileURLToPath } from "node:url";
 
+export const approvedSite = "jarvismedina";
+export const approvedBranch = "prep/private-personal-assistant";
+
+export function deploymentGateError(env) {
+  if (env.CONTEXT !== "production") return "Publication is locked: CONTEXT must be production; previews and branch deploys remain disabled.";
+  if (env.JARVIS_DEPLOY_APPROVED !== "true") return "Publication is locked: JARVIS_DEPLOY_APPROVED must be true in the production build environment.";
+  if (env.JARVIS_HOSTING_PLAN !== "free") return "Publication is locked: JARVIS_HOSTING_PLAN must be free. Confirm the actual team plan in Netlify Billing before proceeding.";
+  if (env.SITE_NAME !== approvedSite) return `Publication is locked: owner authorization applies only to Netlify SITE_NAME=${approvedSite}.`;
+  if (env.BRANCH !== approvedBranch) return `Publication is locked: the production branch must be ${approvedBranch}; main is not authorized.`;
+  return null;
+}
+
 export function permittedBuild(env) {
-  return env.JARVIS_DEPLOY_APPROVED === "true" &&
-    env.CONTEXT === "production" && env.JARVIS_HOSTING_PLAN === "free";
+  return deploymentGateError(env) === null;
 }
 
 export function validateConfiguration(env) {
-  if (!permittedBuild(env)) return "Publication is locked; owner authorization and Free plan are required.";
+  const gateError = deploymentGateError(env);
+  if (gateError) return gateError;
   const required = ["AUTH_URL", "AUTH_SECRET", "AUTH_GITHUB_ID", "AUTH_GITHUB_SECRET",
     "JARVIS_OWNER_GITHUB_ID", "JARVIS_BACKEND_URL", "JARVIS_BACKEND_AUTH_SECRET"];
-  if (required.some((key) => !env[key])) return "Private authentication configuration is incomplete.";
+  const missing = required.filter((key) => !env[key]);
+  if (missing.length) return `Private authentication configuration is incomplete. Set these server-only variables for production Builds and Functions: ${missing.join(", ")}.`;
   if (!/^\d+$/.test(env.JARVIS_OWNER_GITHUB_ID)) return "Owner must be a numeric GitHub ID.";
   if ([env.AUTH_SECRET, env.JARVIS_BACKEND_AUTH_SECRET].some((key) => Buffer.byteLength(key) < 32) ||
     env.AUTH_SECRET === env.JARVIS_BACKEND_AUTH_SECRET) return "Use two distinct strong server-only secrets.";
@@ -30,11 +45,13 @@ export function validateConfiguration(env) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   if (process.argv.includes("--ignore")) {
-    console.log(permittedBuild(process.env) ? "Owner-authorized production build requested." : "Build skipped: publication locked.");
+    const error = validateConfiguration(process.env);
+    console.log(error ? `Build skipped: ${error}` : "Owner-authorized jarvismedina trial build requested.");
     // Netlify: 0 skips a Git-triggered build; 1 allows it to continue.
-    process.exit(permittedBuild(process.env) ? 1 : 0);
+    // Check all prerequisites here to avoid wasting a build on missing secrets.
+    process.exit(error ? 0 : 1);
   }
   const error = validateConfiguration(process.env);
   if (error) { console.error(error); process.exit(1); }
-  console.log("Configuration passed. Verify the actual Free plan in the provider dashboard.");
+  console.log("Configuration passed for the authorized jarvismedina trial. The Free plan was confirmed by the owner; this script cannot inspect billing.");
 }

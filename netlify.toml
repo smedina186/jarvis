@@ -1,6 +1,6 @@
 # RESEARCH: opennextjs/opennextjs-netlify and Netlify Next.js/ignore-build docs.
 # DECISION: Use Netlify's automatic OpenNext adapter; retain SSR and Auth.js.
-# No static export. Builds remain locked until the owner authorizes publication.
+# No static export. Only the owner's explicitly approved jarvismedina trial is enabled.
 [build]
   base = "frontend"
   publish = ".next"
@@ -11,6 +11,11 @@
   NODE_VERSION = "24"
   NEXT_TELEMETRY_DISABLED = "1"
   JARVIS_HOSTING_PLAN = "free"
+
+# Owner expressly authorized the jarvismedina trial and confirmed Free on 2026-11-19.
+# The gate also requires SITE_NAME=jarvismedina and BRANCH=prep/private-personal-assistant.
+[context.production.environment]
+  JARVIS_DEPLOY_APPROVED = "true"
 
 # Previews/branch deploys must not receive production secrets or serve the app.
 [context.deploy-preview]
