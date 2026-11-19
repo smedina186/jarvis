@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:netlify": "node ../scripts/netlify-preflight.mjs && next build",
+    "test:hosting": "node --test ../scripts/netlify-preflight.test.mjs",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

@@ -1,6 +1,14 @@
 # YC Hackathon Codex Guide
 
-This file makes Codex behave consistently with the existing Claude project rules in [`.claude/CLAUDE.md`](/Users/affoon/Documents/GitHub/YC_hackathon/.claude/CLAUDE.md). If there is any conflict, use `.claude/CLAUDE.md` as the source of truth.
+## Current owner-authorized scope (supersedes historical hosting choices)
+
+- Mandatory budget: $0. Evaluate Netlify Free + Render Free; no paid services or AI calls.
+- No publication until explicit owner authorization; PRs remain drafts and must not be merged.
+- Preserve owner-only Auth.js login and separate backend JWT authentication.
+- Keep legacy person research, face identification, realtime and external agents disabled.
+- Historical Vercel/hackathon sections below do not authorize deployment or purchases.
+
+This file makes Codex behave consistently with the existing project rules in [`.claude/CLAUDE.md`](.claude/CLAUDE.md). If there is any conflict, use `.claude/CLAUDE.md` as the source of truth.
 
 ## Project
 

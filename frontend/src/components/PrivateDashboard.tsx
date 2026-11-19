@@ -17,9 +17,9 @@ export default function PrivateDashboard() {
       const data = await response.json();
       setStatus(response.ok && data.status === "ok"
         ? "Backend privado conectado"
-        : "Backend pendiente de configuración o no disponible");
+        : "Sin conexión. Si Render Free está suspendido, espera un minuto y vuelve a comprobar.");
     } catch {
-      setStatus("No se pudo conectar al backend privado");
+      setStatus("Sin conexión. Si Render Free está suspendido, espera un minuto y vuelve a comprobar.");
     } finally { setPending(false); }
   }, [router]);
   useEffect(() => { const initial = setTimeout(check, 0); return () => clearTimeout(initial); }, [check]);
@@ -40,7 +40,7 @@ export default function PrivateDashboard() {
       </section>
       <section className="private-grid" aria-label="Capacidades de JARVIS">
         {[
-          ["Chat con IA", "Pendiente", "No hay un proveedor conectado ni respuestas simuladas presentadas como reales."],
+          ["Chat con IA", "Demostración sin IA", "Vista de demostración: no hay modelo conectado, respuestas de IA ni llamadas a servicios externos."],
           ["Agentes especializados", "Desactivados", "Ninguna tarea externa se ejecuta desde este panel."],
           ["Privacidad", "Modo privado", "Reconocimiento facial e investigación de personas bloqueados."],
           ["Tiempo real", "Desactivado", "Convex, cámara y voz no abren conexiones desde este panel."],

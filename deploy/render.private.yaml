@@ -1,9 +1,9 @@
-# Preparation only. Do not apply/import until the owner authorizes deployment and cost.
+# Preparation only. Budget $0: Free only; never add a card or activate paid services.
 services:
   - type: web
     name: jarvis-private-api
     runtime: docker
-    plan: starter
+    plan: free
     rootDir: backend
     dockerfilePath: ./Dockerfile.private
     dockerContext: .

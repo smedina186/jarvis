@@ -1,5 +1,13 @@
 # JARVIS — Project Rules & Agent Instructions
 
+## Current authorized scope
+
+The owner requires a $0 budget, Netlify Free evaluation and Render Free preparation.
+Do not publish, merge PRs, activate paid services or call external AI providers.
+Keep owner-only authentication and the backend JWT gate; legacy invasive research
+and face identification remain disabled. These instructions supersede historical
+hackathon deployment and person-intelligence priorities below.
+
 ## Project Overview
 JARVIS is a real-time person intelligence platform for the Web Agents Hackathon (Browser Use + YC).
 Glasses camera → facial recognition → browser agent swarm → social enrichment → corkboard UI.

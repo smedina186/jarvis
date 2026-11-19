@@ -1,5 +1,10 @@
 # JARVIS
 
+> **Ruta vigente, presupuesto $0:** Netlify Free + Render Free, sin publicación.
+> [Guía sencilla desde iPad](GUIA_IPAD_COSTO_CERO.md) ·
+> [Seguridad y bloqueos de despliegue](PRIVACIDAD_Y_DESPLIEGUE.md).
+> Las indicaciones históricas de Vercel y planes de pago no se deben aplicar.
+
 > **Preparación actual: asistente privado.** Ver [PRIVACIDAD_Y_DESPLIEGUE.md](PRIVACIDAD_Y_DESPLIEGUE.md).
 > Nada publicado. Acceso cerrado sin OAuth configurado. La entrada recomendada
 > es `uv run uvicorn private_main:app --host 127.0.0.1 --port 8000` en `backend/`.
