@@ -1,5 +1,11 @@
+.env
+.env.*
 .venv
 __pycache__
 .pytest_cache
 .ruff_cache
-tests
+.coverage
+*.db
+*.log
+agent_credentials.json
+pimeyes_cookies.json

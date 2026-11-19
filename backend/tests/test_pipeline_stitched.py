@@ -27,7 +27,9 @@ def _import_main_fresh():
 
     import main
 
-    importlib.reload(main)
+    # These tests exercise historical pipeline wiring, not the private deployment entry point.
+    with patch.dict("os.environ", {"JARVIS_PERSONAL_MODE": "false"}):
+        importlib.reload(main)
     return main
 
 

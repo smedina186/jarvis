@@ -1,3 +1,4 @@
+import { assertRealtimeDisabled } from "./privateAccess";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
@@ -7,6 +8,7 @@ export const create = mutation({
     source: v.string(),
   },
   handler: async (ctx, { imageUrl, source }) => {
+    assertRealtimeDisabled();
     const captureId = await ctx.db.insert("captures", {
       imageUrl,
       timestamp: Date.now(),
@@ -36,12 +38,14 @@ export const updateStatus = mutation({
     personId: v.optional(v.id("persons")),
   },
   handler: async (ctx, { id, status, personId }) => {
+    assertRealtimeDisabled();
     await ctx.db.patch(id, { status, ...(personId ? { personId } : {}) });
   },
 });
 
 export const listRecent = query({
   handler: async (ctx) => {
+    assertRealtimeDisabled();
     return await ctx.db.query("captures").order("desc").take(20);
   },
 });
@@ -50,6 +54,7 @@ export const listRecent = query({
 export const store = mutation({
   args: { data: v.any() },
   handler: async (ctx, { data }) => {
+    assertRealtimeDisabled();
     const captureId = data.capture_id ?? `cap_${Date.now()}`;
     const source = data.source ?? "manual_upload";
     const status = data.status ?? "pending";

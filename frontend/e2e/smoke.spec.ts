@@ -1,42 +1,45 @@
 import { test, expect } from "@playwright/test";
+import { encode } from "next-auth/jwt";
 
-test.describe("JARVIS Smoke Test", () => {
-  test("renders corkboard with person cards, opens and closes dossier, and shows live feed", async ({ page }) => {
-    await page.goto("/");
+test("anonymous visitors cannot access the panel or proxy", async ({ page, request }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("button", { name: "Entrar con GitHub" })).toBeVisible();
+  expect((await request.get("/api/backend/health")).status()).toBe(401);
+  expect((await request.post("/api/backend/agents/research")).status()).toBe(403);
+});
 
-    // 1. Verify the app shell renders
-    await expect(page.getByTestId("jarvis-app")).toBeVisible();
-
-    // 2. Verify the Corkboard container renders
-    await expect(page.getByTestId("corkboard-container")).toBeVisible();
-
-    // 3. Verify at least one person card renders (demo data has 3)
-    const firstCard = page.getByTestId("person-card-person_1");
-    await expect(firstCard).toBeVisible({ timeout: 10_000 });
-
-    // 4. Verify multiple person cards exist
-    const allCards = page.locator("[data-person-card]");
-    await expect(allCards).toHaveCount(3);
-
-    // 5. Dossier should already be open (page.tsx defaults to first person selected)
-    const dossier = page.getByTestId("dossier-view");
-    await expect(dossier).toBeVisible();
-
-    // 6. Verify dossier shows the person's name
-    await expect(dossier.getByText("Jordan Vale")).toBeVisible();
-
-    // 7. Close the dossier
-    await page.getByTestId("close-dossier").click();
-    await expect(dossier).not.toBeVisible();
-
-    // 8. Click a different person card to reopen dossier
-    await page.getByTestId("person-card-person_2").click();
-    await expect(page.getByTestId("dossier-view")).toBeVisible();
-    await expect(page.getByTestId("dossier-view").getByText("Mina Sol")).toBeVisible();
-
-    // 9. Verify LiveFeed section exists
-    const liveFeed = page.getByTestId("live-feed");
-    await expect(liveFeed).toBeVisible();
-    await expect(liveFeed.getByText("ACTIVE SIGNALS")).toBeVisible();
+test("local owner test session connects to FastAPI and can sign out", async ({ page, context }) => {
+  // Synthetic Auth.js session for local protocol tests, not a real GitHub OAuth login.
+  const cookie = await encode({
+    secret: "local-e2e-test-session-secret-not-for-production-098765",
+    salt: "authjs.session-token", token: { sub: "123456", name: "Test Owner" }, maxAge: 300,
   });
+  await context.addCookies([{
+    name: "authjs.session-token", value: cookie, domain: "127.0.0.1", path: "/",
+    httpOnly: true, sameSite: "Lax",
+  }]);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Bienvenido a JARVIS" })).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText("Backend privado conectado");
+  expect((await context.request.get("/api/backend/research/someone/stream")).status()).toBe(403);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Cerrar sesión" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login$/);
+  expect((await context.request.get("/api/backend/health")).status()).toBe(401);
+});
+
+test("a different account ID cannot open the panel", async ({ page, context }) => {
+  const cookie = await encode({
+    secret: "local-e2e-test-session-secret-not-for-production-098765",
+    salt: "authjs.session-token", token: { sub: "999999" }, maxAge: 300,
+  });
+  await context.addCookies([{
+    name: "authjs.session-token", value: cookie, domain: "127.0.0.1", path: "/",
+    httpOnly: true, sameSite: "Lax",
+  }]);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login$/);
 });

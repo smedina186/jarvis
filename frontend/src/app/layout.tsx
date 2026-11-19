@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bebas_Neue, Courier_Prime, Inter } from "next/font/google";
-import { ConvexClientProvider } from "./ConvexClientProvider";
 import "./globals.css";
+import "./private.css";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
@@ -21,8 +21,14 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "JARVIS // CLASSIFIED",
-  description: "Real-time person intelligence platform",
+  title: "JARVIS privado",
+  description: "Asistente personal de acceso privado",
+  robots: { index: false, follow: false, noarchive: true },
+  appleWebApp: { capable: true, title: "JARVIS", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#0a0d08",
 };
 
 export default function RootLayout({
@@ -31,11 +37,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body
         className={`${bebasNeue.variable} ${courierPrime.variable} ${inter.variable} antialiased bg-[#0a0d08] text-[#c8d6b0]`}
       >
-        <ConvexClientProvider>{children}</ConvexClientProvider>
+        {children}
       </body>
     </html>
   );

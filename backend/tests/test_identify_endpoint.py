@@ -15,8 +15,8 @@ def transport():
 
 
 @pytest.fixture
-async def client(transport):
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+async def client(transport, owner_headers):
+    async with AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as c:
         yield c
 
 

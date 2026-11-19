@@ -2,12 +2,16 @@ name: Deploy
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+    inputs:
+      authorize_deployment:
+        description: "Deploy only after the owner explicitly approves publication"
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   backend-image:
+    if: ${{ inputs.authorize_deployment == true }}
     name: Backend Image
     runs-on: ubuntu-latest
     permissions:
@@ -39,12 +43,13 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: backend
-          file: backend/Dockerfile
+          file: backend/Dockerfile.private
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
   frontend-vercel:
+    if: ${{ inputs.authorize_deployment == true }}
     name: Frontend Vercel
     runs-on: ubuntu-latest
     env:
@@ -71,6 +76,10 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+
+      - name: Require All Deployments authentication before deploying
+        if: ${{ steps.vercel.outputs.enabled == 'true' }}
+        run: python ../scripts/check_vercel_protection.py
 
       - name: Setup Node
         if: ${{ steps.vercel.outputs.enabled == 'true' }}

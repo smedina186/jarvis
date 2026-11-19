@@ -31,6 +31,7 @@ from identification.search_manager import FaceSearchManager
 from memory.supermemory_client import SuperMemoryClient
 from observability.laminar import initialize_laminar
 from pipeline import CapturePipeline
+from private_access import PrivateAccessMiddleware
 from schemas import (
     AgentInfo,
     AgentStartRequest,
@@ -57,7 +58,8 @@ logger.add("/tmp/jarvis_backend.log", rotation="10 MB", level="DEBUG",
            format="{time:HH:mm:ss.SSS} | {level:<7} | {name}:{function}:{line} | {message}")
 
 # Initialize Laminar tracing (no-op if LMNR_PROJECT_API_KEY not set)
-initialize_laminar(settings)
+if not settings.personal_mode:
+    initialize_laminar(settings)
 
 # Build pipeline components
 detector = MediaPipeFaceDetector()
@@ -65,7 +67,10 @@ embedder = ArcFaceEmbedder()
 
 # Database: use Convex when configured, else in-memory
 convex_gw = ConvexGateway(settings)
-db_gateway = convex_gw if convex_gw.configured else InMemoryDatabaseGateway()
+db_gateway = (
+    convex_gw if convex_gw.configured and not settings.personal_mode
+    else InMemoryDatabaseGateway()
+)
 
 # Face search: PimEyes (primary) + reverse image search (fallback)
 # PimEyes now uses direct API with cookies — no email/password needed
@@ -141,7 +146,7 @@ set_pipeline(pipeline)
 
 # Telegram bot (None when unconfigured)
 telegram_bot: TelegramCaptureBot | None = create_telegram_bot(
-    settings.telegram_bot_token, pipeline,
+    settings.telegram_bot_token if not settings.personal_mode else None, pipeline,
 )
 
 # Task prompts keyed by source type
@@ -235,6 +240,7 @@ app.add_middleware(
 )
 
 app.include_router(webhook_router)
+app.add_middleware(PrivateAccessMiddleware, settings_factory=lambda: settings)
 
 
 @app.get("/api/health", response_model=HealthResponse)

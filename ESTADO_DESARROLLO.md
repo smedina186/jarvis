@@ -1,5 +1,9 @@
 # JARVIS — revisión e instalación, etapa 1
 
+> Registro histórico de la primera etapa. El estado actual de acceso, arranque
+> y verificaciones está en [PRIVACIDAD_Y_DESPLIEGUE.md](PRIVACIDAD_Y_DESPLIEGUE.md).
+> El acceso anónimo descrito aquí ya no está disponible.
+
 Revisión: 19 de noviembre de 2026. Base: `4369c34babd21d539c420866da51c7a8365f1c9e`.
 Repositorio local: `/workspace/jarvis`.
 

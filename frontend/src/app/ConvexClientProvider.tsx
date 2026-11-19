@@ -10,7 +10,8 @@ export function useConvexAvailable(): boolean {
 }
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
-  const deploymentUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  // Closed even if a legacy deployment URL is accidentally present.
+  const deploymentUrl: string | undefined = undefined;
 
   const client = useMemo(() => {
     if (!deploymentUrl) return null;

@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BACKEND_DIR = Path(__file__).resolve().parent
@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="JARVIS_LOG_LEVEL")
     frontend_origin: str = Field(default="http://localhost:3000", alias="JARVIS_FRONTEND_ORIGIN")
     api_port: int = Field(default=8000, alias="JARVIS_API_PORT")
+    personal_mode: bool = Field(default=True, alias="JARVIS_PERSONAL_MODE")
+    owner_github_id: str = Field(default="", alias="JARVIS_OWNER_GITHUB_ID")
+    backend_auth_secret: SecretStr = Field(default="", alias="JARVIS_BACKEND_AUTH_SECRET")
 
     convex_url: str | None = Field(default=None, alias="CONVEX_URL")
     mongodb_uri: str | None = Field(default=None, alias="MONGODB_URI")

@@ -10,16 +10,19 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --project=chromium --project=iphone-layout --project=ipad-layout",
+    "test:safari": "playwright test --project=iphone-webkit --project=ipad-webkit"
   },
   "dependencies": {
     "@use-gesture/react": "^10.3.1",
-    "convex": "^1.32.0",
+    "convex": "^1.51.0",
     "framer-motion": "^12.34.3",
+    "jose": "^6.2.18",
     "lucide-react": "^0.575.0",
-    "next": "16.2.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "next": "^16.4.6",
+    "next-auth": "^5.0.0-beta.32",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
@@ -32,7 +35,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.4",
     "eslint": "^9",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "^16.4.6",
     "jsdom": "^28.1.0",
     "tailwindcss": "^4",
     "typescript": "^5",

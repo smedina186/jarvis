@@ -1,5 +1,10 @@
 # JARVIS
 
+> **Preparación actual: asistente privado.** Ver [PRIVACIDAD_Y_DESPLIEGUE.md](PRIVACIDAD_Y_DESPLIEGUE.md).
+> Nada publicado. Acceso cerrado sin OAuth configurado. La entrada recomendada
+> es `uv run uvicorn private_main:app --host 127.0.0.1 --port 8000` en `backend/`.
+> El chat y los agentes personales aún no están operativos.
+
 > Instalación verificada y diagnóstico en español: [ESTADO_DESARROLLO.md](ESTADO_DESARROLLO.md).
 > Este repositorio todavía no incluye un chat general ni autorización de tareas.
 > La descripción histórica de reconocimiento e investigación de personas que sigue

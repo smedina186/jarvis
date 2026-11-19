@@ -1,3 +1,4 @@
+import { assertRealtimeDisabled } from "./privateAccess";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
@@ -5,6 +6,7 @@ import { mutation, query } from "./_generated/server";
 
 export const listAll = query({
   handler: async (ctx) => {
+    assertRealtimeDisabled();
     return await ctx.db.query("persons").collect();
   },
 });
@@ -12,6 +14,7 @@ export const listAll = query({
 export const getById = query({
   args: { id: v.id("persons") },
   handler: async (ctx, { id }) => {
+    assertRealtimeDisabled();
     return await ctx.db.get(id);
   },
 });
@@ -26,6 +29,7 @@ export const getByStatus = query({
     ),
   },
   handler: async (ctx, { status }) => {
+    assertRealtimeDisabled();
     return await ctx.db
       .query("persons")
       .filter((q) => q.eq(q.field("status"), status))
@@ -43,6 +47,7 @@ export const create = mutation({
     boardPosition: v.optional(v.object({ x: v.number(), y: v.number() })),
   },
   handler: async (ctx, { name, photoUrl, confidence, boardPosition }) => {
+    assertRealtimeDisabled();
     const now = Date.now();
     // Auto-position: random spot on the board if not provided
     const pos = boardPosition ?? {
@@ -83,6 +88,7 @@ export const updateStatus = mutation({
     ),
   },
   handler: async (ctx, { id, status }) => {
+    assertRealtimeDisabled();
     await ctx.db.patch(id, { status, updatedAt: Date.now() });
 
     const person = await ctx.db.get(id);
@@ -130,6 +136,7 @@ export const updateDossier = mutation({
     }),
   },
   handler: async (ctx, { id, dossier }) => {
+    assertRealtimeDisabled();
     await ctx.db.patch(id, {
       dossier,
       status: "complete",
@@ -144,6 +151,7 @@ export const updatePosition = mutation({
     boardPosition: v.object({ x: v.number(), y: v.number() }),
   },
   handler: async (ctx, { id, boardPosition }) => {
+    assertRealtimeDisabled();
     await ctx.db.patch(id, { boardPosition });
   },
 });
@@ -152,6 +160,7 @@ export const updatePosition = mutation({
 export const store = mutation({
   args: { data: v.any() },
   handler: async (ctx, { data }) => {
+    assertRealtimeDisabled();
     const now = Date.now();
     const name = data.name ?? "Unknown";
     const confidence = typeof data.confidence === "number" ? data.confidence : 0.5;
@@ -187,6 +196,7 @@ export const update = mutation({
     data: v.any(),
   },
   handler: async (ctx, { person_id, data }) => {
+    assertRealtimeDisabled();
     // Find person by scanning (person_id is a pipeline-side ID, not Convex _id)
     const all = await ctx.db.query("persons").collect();
     // Try matching by _id first, then by name or other field
@@ -254,6 +264,7 @@ export const update = mutation({
 // Wipe all persons + activity log (fresh start)
 export const deleteAll = mutation({
   handler: async (ctx) => {
+    assertRealtimeDisabled();
     const persons = await ctx.db.query("persons").collect();
     for (const p of persons) {
       await ctx.db.delete(p._id);
@@ -278,6 +289,7 @@ export const deleteAll = mutation({
 export const get = query({
   args: { person_id: v.string() },
   handler: async (ctx, { person_id }) => {
+    assertRealtimeDisabled();
     const all = await ctx.db.query("persons").collect();
     return all.find(
       (p) => p._id === person_id || (p as Record<string, unknown>)["person_id"] === person_id

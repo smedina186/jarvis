@@ -1,9 +1,11 @@
+import { assertRealtimeDisabled } from "./privateAccess";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
 export const getByPerson = query({
   args: { personId: v.id("persons") },
   handler: async (ctx, { personId }) => {
+    assertRealtimeDisabled();
     return await ctx.db
       .query("intelFragments")
       .withIndex("by_person", (q) => q.eq("personId", personId))
@@ -20,6 +22,7 @@ export const create = mutation({
     verified: v.optional(v.boolean()),
   },
   handler: async (ctx, { personId, source, dataType, content, verified }) => {
+    assertRealtimeDisabled();
     const now = Date.now();
     const fragmentId = await ctx.db.insert("intelFragments", {
       personId,
@@ -46,6 +49,7 @@ export const create = mutation({
 
 export const recentActivity = query({
   handler: async (ctx) => {
+    assertRealtimeDisabled();
     return await ctx.db
       .query("activityLog")
       .order("desc")
