@@ -7,8 +7,14 @@ de abajo son para cuando autorices explícitamente el primer despliegue gratuito
 ## 1. Revisa el código en GitHub
 
 En Safari, abre `github.com/smedina186/jarvis` → **Pull requests** → el borrador
-de JARVIS privado. La rama es `prep/private-personal-assistant`. Puedes revisar
+de JARVIS privado **cuando esté subido**. Actualmente la subida está bloqueada por
+un error 403 de la credencial Git del entorno; el PR aún no existe. El texto está
+preparado en `docs/PR_BORRADOR.md`. La rama es `prep/private-personal-assistant`. Puedes revisar
 los archivos y pruebas sin fusionar. No actives Auto-merge ni un workflow de deploy.
+
+Para completar la subida sin usar una computadora propia, hace falta habilitar
+una conexión Git con escritura a este repositorio en el entorno de trabajo y
+reintentar desde aquí. No pegues un token en el chat ni en un archivo del proyecto.
 
 El repositorio sigue siendo público: cualquiera puede leer su código. El acceso
 al panel y los datos se protege mediante inicio de sesión; eso no oculta el código

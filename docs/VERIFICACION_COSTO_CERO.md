@@ -47,6 +47,7 @@ despliegue ni se conectó un proveedor de IA para verificar estas pruebas.
 - El plan y los medios de pago reales de las cuentas deben revisarse desde sus
   paneles: una variable de entorno no puede verificar ni modificar la facturación.
 
-La rama se presenta para revisión mediante un Pull Request en borrador. No
+La rama está preparada para un Pull Request en borrador; la comprobación Git de
+subida devolvió 403 y no se creó un PR remoto. Su texto está en `PR_BORRADOR.md`. No
 autoriza fusionar ni publicar la aplicación. Las instrucciones están en
 [GUIA_IPAD_COSTO_CERO.md](../GUIA_IPAD_COSTO_CERO.md).
