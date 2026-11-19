@@ -235,7 +235,7 @@ export function BrowserSessionViewer({
           }}>
             {sourceTp}
           </span>
-          <span style={{ color: "rgba(120,180,80,.2)", fontSize: 8 }}>//</span>
+          <span style={{ color: "rgba(120,180,80,.2)", fontSize: 8 }}>{"//"}</span>
           <span style={{
             color: "rgba(200,214,176,.6)", fontSize: 9, fontFamily: "var(--font-mono)",
           }}>

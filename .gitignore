@@ -26,6 +26,10 @@ __pycache__/
 .ruff_cache/
 *.pyc
 *.egg-info/
+.coverage
+accounts.db
+test-results/
+playwright-report/
 
 # Convex / build artifacts
 .convex/

@@ -68,9 +68,13 @@ export function useSessionPoller({
   useEffect(() => {
     if (!enabled || !sessionId) return;
     stopped.current = false;
-    poll(); // immediate first fetch
+    const initial = setTimeout(poll, 0);
     const id = setInterval(poll, intervalMs);
-    return () => clearInterval(id);
+    return () => {
+      stopped.current = true;
+      clearTimeout(initial);
+      clearInterval(id);
+    };
   }, [enabled, sessionId, intervalMs, poll]);
 
   return { data, error };

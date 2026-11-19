@@ -26,9 +26,11 @@ export function useServerVoice({
   const wsRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const onCommandRef = useRef(onCommand);
-  onCommandRef.current = onCommand;
   const onTranscriptRef = useRef(onTranscript);
-  onTranscriptRef.current = onTranscript;
+  useEffect(() => {
+    onCommandRef.current = onCommand;
+    onTranscriptRef.current = onTranscript;
+  }, [onCommand, onTranscript]);
 
   const cleanup = useCallback(() => {
     if (recorderRef.current && recorderRef.current.state !== "inactive") {

@@ -57,8 +57,11 @@ export function StatusBar({ people, activePerson, events, backendOnline, error }
 
   // Reset index when events change length
   useEffect(() => {
-    setEventIdx(0);
-    setTick(true);
+    const reset = setTimeout(() => {
+      setEventIdx(0);
+      setTick(true);
+    }, 0);
+    return () => clearTimeout(reset);
   }, [displayEvents?.length]);
 
   // Snake canvas animation (idle state)

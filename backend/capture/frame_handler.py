@@ -50,7 +50,9 @@ class FrameHandler:
         embedder: ArcFaceEmbedder | None = None,
         face_searcher: FaceSearchManager | None = None,
     ):
-        self.detector = HumanDetector()
+        # Load YOLO only when processing a frame, never while importing the API.
+        # This keeps health checks and unrelated routes independent of model downloads.
+        self._detector: HumanDetector | None = None
         self._face_detector = face_detector
         self._embedder = embedder
         self._face_searcher = face_searcher
@@ -66,6 +68,12 @@ class FrameHandler:
             embedder is not None,
             face_searcher is not None,
         )
+
+    @property
+    def detector(self) -> HumanDetector:
+        if self._detector is None:
+            self._detector = HumanDetector()
+        return self._detector
 
     async def process_frame(
         self,

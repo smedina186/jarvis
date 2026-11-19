@@ -1,5 +1,10 @@
 # JARVIS
 
+> Instalación verificada y diagnóstico en español: [ESTADO_DESARROLLO.md](ESTADO_DESARROLLO.md).
+> Este repositorio todavía no incluye un chat general ni autorización de tareas.
+> La descripción histórica de reconocimiento e investigación de personas que sigue
+> no representa el alcance de la nueva aplicación solicitada.
+
 Real-time person intelligence platform. Point smart glasses at someone, get a full dossier in seconds.
 
 **Glasses camera → facial recognition → browser agent swarm → social enrichment → corkboard UI**
@@ -51,9 +56,8 @@ cp .env.example .env
 
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -e .
-uvicorn main:app --reload --port 8000
+uv sync --locked --extra dev
+uv run uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 The backend starts even with missing API keys — features degrade gracefully. Check what's available:
@@ -67,7 +71,7 @@ GET http://localhost:8000/api/services
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 

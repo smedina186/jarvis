@@ -222,9 +222,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+local_origins = ["http://localhost:3001"]
+if settings.environment == "development":
+    local_origins.extend(["http://127.0.0.1:3000", "http://127.0.0.1:3001"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin, "http://localhost:3001"],
+    allow_origins=[settings.frontend_origin, *local_origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -7,7 +7,7 @@ vi.mock("framer-motion", () => ({
     {},
     {
       get: (_target, prop: string) => {
-        return React.forwardRef(
+        const MockMotion = React.forwardRef(
           (
             {
               children,
@@ -22,6 +22,8 @@ vi.mock("framer-motion", () => ({
           ) =>
             React.createElement(prop, { ...rest, ref }, children)
         );
+        MockMotion.displayName = `MockMotion.${prop}`;
+        return MockMotion;
       },
     }
   ),

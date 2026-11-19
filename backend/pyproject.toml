@@ -29,6 +29,8 @@ dependencies = [
   "pydantic-settings>=2.10.1",
   "python-multipart>=0.0.27",
   "twscrape>=0.17.0",
+  "torch>=2.0.0",
+  "torchvision>=0.15.0",
   "sse-starlette>=1.8.0",
   "ultralytics>=8.3.0",
   "uvicorn>=0.35.0",
@@ -52,6 +54,7 @@ packages = ["agents", "capture", "db", "enrichment", "eval", "identification", "
 testpaths = ["tests"]
 addopts = "--cov=. --cov-report=term-missing --cov-config=pyproject.toml"
 asyncio_mode = "auto"
+markers = ["live: tests requiring real external API credentials"]
 
 [tool.coverage.run]
 source = ["."]
@@ -94,3 +97,15 @@ override-dependencies = [
 dev = [
     "pytest-asyncio>=1.3.0",
 ]
+
+# RESEARCH: astral-sh/uv PyTorch integration guide and pytorch/pytorch.
+# DECISION: Use official CPU wheels on Linux for reproducible local development.
+# This retains YOLO functionality without downloading several GB of CUDA libraries.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

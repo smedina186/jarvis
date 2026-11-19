@@ -29,10 +29,12 @@ export function useVoiceCommands({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const commandsRef = useRef(commands);
-  commandsRef.current = commands;
 
   const onTranscriptRef = useRef(onTranscript);
-  onTranscriptRef.current = onTranscript;
+  useEffect(() => {
+    commandsRef.current = commands;
+    onTranscriptRef.current = onTranscript;
+  }, [commands, onTranscript]);
 
   const start = useCallback(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
