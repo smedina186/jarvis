@@ -1,5 +1,5 @@
 # RESEARCH: opennextjs/opennextjs-netlify and Netlify Next.js/ignore-build docs.
-# DECISION: Use Netlify's automatic OpenNext adapter; retain SSR and Auth.js.
+# DECISION: Explicitly enable the Next.js runtime adapter; retain SSR and Auth.js.
 # No static export. Only the owner's explicitly approved jarvismedina trial is enabled.
 [build]
   base = "frontend"
@@ -11,6 +11,11 @@
   NODE_VERSION = "24"
   NEXT_TELEMETRY_DISABLED = "1"
   JARVIS_HOSTING_PLAN = "free"
+
+# Ensure Netlify prepares Next.js dynamic routes as functions, rather than
+# publishing only raw .next build artifacts.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 # Owner expressly authorized the jarvismedina trial and confirmed Free on 2026-11-19.
 # The gate also requires SITE_NAME=jarvismedina and BRANCH=prep/private-personal-assistant.
