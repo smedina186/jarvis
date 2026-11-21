@@ -23,9 +23,9 @@ describe("Private dashboard — phase 1", () => {
 
   it("changes tabs and keeps future features visibly inactive", () => {
     render(<PrivateDashboard />);
-    fireEvent.click(screen.getByRole("button", { name: "Agentes", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^Agentes$/ }));
     expect(screen.getByText("Aún no hay agentes conectados. No se ejecutarán tareas.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Misiones", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^Misiones$/ }));
     expect(screen.getByText("No hay misiones activas")).toBeInTheDocument();
   });
 });

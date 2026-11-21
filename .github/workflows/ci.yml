@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, prep/private-personal-assistant]
   pull_request:
-    branches: [main]
+    branches: [main, prep/private-personal-assistant]
 
 jobs:
   backend:
@@ -84,3 +84,12 @@ jobs:
 
       - name: Test no-publication hosting guards
         run: npm run test:hosting
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build

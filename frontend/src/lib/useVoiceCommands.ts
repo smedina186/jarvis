@@ -123,6 +123,9 @@ export function useVoiceCommands({
 
   useEffect(() => {
     if (enabled) {
+      // Legacy voice commands are not mounted in the private dashboard;
+      // starting recognition may synchronously report unsupported browsers.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       start();
     } else {
       stop();
