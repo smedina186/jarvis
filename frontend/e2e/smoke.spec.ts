@@ -20,8 +20,13 @@ test("local owner test session connects to FastAPI and can sign out", async ({ p
     httpOnly: true, sameSite: "Lax",
   }]);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Bienvenido a JARVIS" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bienvenido, Sebastián. ¿En qué trabajamos hoy?" })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("Backend privado conectado");
+  await expect(page.getByRole("img", { name: "Núcleo visual de JARVIS" })).toBeVisible();
+  await page.getByRole("button", { name: "Conexiones" }).click();
+  await expect(page.getByRole("heading", { name: "Conexiones" })).toBeVisible();
+  await expect(page.getByText("Integración de IA pendiente").first()).toBeVisible();
+  await page.getByRole("button", { name: "Chat", exact: true }).click();
   expect((await context.request.get("/api/backend/research/someone/stream")).status()).toBe(403);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Cerrar sesión" }).click();

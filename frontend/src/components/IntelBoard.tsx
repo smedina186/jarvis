@@ -587,6 +587,9 @@ export default function IntelBoard() {
       }),
     };
 
+    // This legacy, unmounted intelligence view mirrors an external stream into a local board.
+    // Keep the synchronization isolated until the retired flow is redesigned.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPeople((prev) => {
       // Deduplicate by id OR name (prevents duplicate sidebar entries)
       const existing = prev.findIndex(
@@ -720,6 +723,8 @@ export default function IntelBoard() {
   // Set pipeline to "scanning" when camera goes live
   useEffect(() => {
     if (camStatus === "live" && pipelineStatus.stage === "idle") {
+      // Legacy camera flow is disabled on the private JARVIS dashboard.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPipelineStatus({ stage: "scanning" });
     }
     if (camStatus === "disconnected") {
@@ -730,6 +735,8 @@ export default function IntelBoard() {
   // When streaming starts via sidebar search, update pipeline
   useEffect(() => {
     if (isStreaming && streamPerson) {
+      // Legacy research flow is disabled on the private JARVIS dashboard.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPipelineStatus({ stage: "researching", name: streamPerson.summary.nm });
     }
   }, [isStreaming, streamPerson]);

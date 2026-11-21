@@ -89,6 +89,7 @@ override-dependencies = [
     "aiohttp>=3.13.4",
     "langchain-openai>=1.1.14",
     "lxml>=6.1.0",
+    "mcp>=1.30.0,<2",
     "openai>=2.26.0",
     "pillow>=12.2.0",
     "pygments>=2.20.0",
