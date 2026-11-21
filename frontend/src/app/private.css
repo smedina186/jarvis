@@ -231,3 +231,18 @@ body { background: var(--jarvis-bg); }
   .jarvis-eye-ring-one, .jarvis-eye-ring-two, .jarvis-eye-gem, .jarvis-spin { animation: none; }
   .jarvis-nav-item { transition: none; }
 }
+/* Real Gemini chat, keeping the existing purple shell and touch targets. */
+.gemini-conversation { width: 100%; max-width: 900px; margin: 0 auto; }
+.jarvis-composer textarea { flex: 1; min-width: 0; min-height: 52px; max-height: 180px; resize: vertical; background: transparent; border: 0; color: var(--jarvis-text); font: inherit; font-size: 16px; line-height: 1.5; padding: 10px 4px; }
+.jarvis-composer textarea::placeholder { color: var(--jarvis-muted); }
+.jarvis-composer textarea:focus-visible { outline: 2px solid var(--jarvis-lilac); outline-offset: 3px; border-radius: 8px; }
+.gemini-messages { max-height: 360px; overflow-y: auto; display: grid; gap: 12px; padding: 12px 2px; margin-bottom: 14px; text-align: left; }
+.gemini-message { padding: 14px 16px; border: 1px solid var(--jarvis-border); background: rgba(35,15,58,.8); border-radius: 14px; }
+.gemini-user { margin-left: 20px; background: rgba(86,32,126,.5); }
+.gemini-message strong { color: var(--jarvis-lilac); font-size: 12px; }
+.gemini-message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; font-size: 15px; line-height: 1.65; }
+.gemini-processing { display: flex; align-items: center; gap: 8px; color: var(--jarvis-lilac); font-size: 13px; }
+.gemini-error { text-align: left; padding: 12px; background: #3d1935; border: 1px solid #b87697; border-radius: 10px; color: #ffe0ec; font-size: 13px; }
+.gemini-privacy { color: var(--jarvis-muted); font-size: 11px; line-height: 1.6; text-align: left; margin: 12px 0; }
+.jarvis-signal-configured { background: #e9be70; }.jarvis-state-configured { color: #ffdda2; background: #6b4d293d; }
+.jarvis-dashboard [hidden] { display: none !important; }

@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity, Bot, CircleAlert, Clock3, Code2, FileText,
-  Layers3, Link2, ListTodo, LockKeyhole, MessageCircle, MicOff, Plus,
-  Radar, RefreshCw, Search, Send, ShieldCheck, Sparkles, Workflow,
+  Layers3, Link2, ListTodo, LockKeyhole, MessageCircle, Plus,
+  Radar, RefreshCw, Search, ShieldCheck, Workflow,
 } from "lucide-react";
 import Image from "next/image";
+import GeminiConversation, { type GeminiStatus } from "./GeminiConversation";
 
 type Section = "chat" | "agentes" | "misiones" | "conexiones";
 type BackendHealth = "checking" | "connected" | "error";
@@ -47,14 +48,14 @@ function JarvisEye() {
 
 type Connection = {
   label: string;
-  state: "connected" | "error" | "checking" | "unknown" | "missing";
+  state: "connected" | "error" | "checking" | "unknown" | "missing" | "configured";
   detail: string;
 };
 
 function ConnectionRow({ connection }: { connection: Connection }) {
   const stateLabel = {
     connected: "Conectado", error: "Error", checking: "Comprobando",
-    unknown: "Sin verificar", missing: "Sin configurar",
+    unknown: "Sin verificar", missing: "Sin configurar", configured: "Configurado",
   }[connection.state];
 
   return (
@@ -73,6 +74,7 @@ export default function PrivateDashboard() {
   const routerRef = useRef(router);
   const healthRequest = useRef<AbortController | null>(null);
   useEffect(() => { routerRef.current = router; }, [router]);
+  const [gemini, setGemini] = useState<GeminiStatus | null>(null);
   const [healthError, setHealthError] = useState("");
   const [section, setSection] = useState<Section>("chat");
   const [health, setHealth] = useState<BackendHealth>("checking");
@@ -104,12 +106,22 @@ export default function PrivateDashboard() {
       if (!verified) setHealthError(typeof data === "object" && data !== null &&
         "error" in data && typeof data.error === "string" ? data.error : "No se pudo verificar el backend privado.");
       setLatency(verified ? Math.round(performance.now() - startedAt) : null);
+      if (verified) {
+        try {
+        const providerResponse = await fetch("/api/backend/gemini/status", { cache: "no-store", signal: controller.signal });
+        const provider = await providerResponse.json();
+        if (healthRequest.current !== controller) return;
+        if (providerResponse.ok && ["configured", "not_configured", "error"].includes(provider.state)) setGemini(provider);
+        else setGemini(null);
+        } catch { if (healthRequest.current === controller) setGemini(null); }
+      } else setGemini(null);
     } catch {
       if (healthRequest.current !== controller) return;
       setHealthError(controller.signal.aborted
         ? "La comprobación tardó más de 12 segundos. Espera un minuto y vuelve a intentarlo manualmente."
         : "No se pudo contactar con Render. Vuelve a intentarlo manualmente.");
       setHealth("error");
+      setGemini(null);
       setLatency(null);
     } finally {
       clearTimeout(deadline);
@@ -135,7 +147,7 @@ export default function PrivateDashboard() {
     { label: "Render", state: health === "connected" ? "connected" : health === "checking" ? "checking" : "error",
       detail: health === "connected" ? `Verificado${checkedAt ? ` · ${checkedAt}` : ""}${latency !== null ? ` · ${latency} ms` : ""}` :
         health === "error" ? `No responde a salud privada${checkedAt ? ` · ${checkedAt}` : ""}` : "Comprobando ruta privada…" },
-    { label: "Gemini", state: "missing", detail: "Integración de IA pendiente" },
+    { label: "Gemini", state: gemini?.state === "configured" ? "configured" : gemini?.state === "not_configured" ? "missing" : gemini?.state === "error" ? "error" : "unknown", detail: gemini?.detail || "Estado pendiente de verificar con Render" },
     { label: "OpenAI / ChatGPT", state: "missing", detail: "Integración de IA pendiente" },
   ];
 
@@ -152,19 +164,11 @@ export default function PrivateDashboard() {
       </nav>
 
       <div className="jarvis-main-panel">
-        {section === "chat" && (
-          <section className="jarvis-chat" aria-label="Panel principal">
+          <section className="jarvis-chat" hidden={section !== "chat"} aria-label="Panel principal">
             <JarvisEye />
             <h2 className="jarvis-greeting">Bienvenido, Sebastián. ¿En qué trabajamos hoy?</h2>
-            <div className="jarvis-composer" aria-label="Chat pendiente de integración">
-              <label className="sr-only" htmlFor="jarvis-chat-message">Mensaje a JARVIS</label>
-              <input id="jarvis-chat-message" type="text" disabled placeholder="Chat disponible al conectar una IA" />
-              <button type="button" disabled aria-label="Voz no configurada" title="Voz no configurada"><MicOff size={20} /></button>
-              <button type="button" disabled className="jarvis-send" aria-label="Envío pendiente de configuración"><Send size={19} /></button>
-            </div>
-            <div className="jarvis-chat-footer"><span><Sparkles size={14} /> IA sin configurar</span><span>Acceso privado</span></div>
+            <GeminiConversation status={gemini} onStatus={setGemini} />
           </section>
-        )}
 
         {section === "agentes" && (
           <section className="jarvis-detail" aria-labelledby="agents-title">

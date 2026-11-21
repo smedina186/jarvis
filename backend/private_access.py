@@ -11,7 +11,8 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from config import Settings
 
-PRIVATE_READ_PATHS = {"/api/health", "/api/services", "/api/tasks"}
+PRIVATE_READ_PATHS = {"/api/health", "/api/services", "/api/tasks", "/api/gemini/status"}
+PRIVATE_WRITE_PATHS = {"/api/chat"}
 
 
 class PrivateAccessMiddleware:
@@ -58,13 +59,11 @@ class PrivateAccessMiddleware:
                 )
                 if claims["sub"] != owner:
                     status, detail = 403, "Owner access required"
-                elif (
-                    claims["exp"] - claims["iat"] > 60
-                    or claims["iat"] > time() + 5
-                ):
+                elif claims["exp"] - claims["iat"] > 60 or claims["iat"] > time() + 5:
                     raise ValueError("Invalid token lifetime")
                 elif settings.personal_mode and (
-                    scope["method"] != "GET" or scope["path"] not in PRIVATE_READ_PATHS
+                    not (scope["method"] == "GET" and scope["path"] in PRIVATE_READ_PATHS)
+                    and not (scope["method"] == "POST" and scope["path"] in PRIVATE_WRITE_PATHS)
                 ):
                     status, detail = 403, "Legacy research and capture tools are disabled"
                 else:

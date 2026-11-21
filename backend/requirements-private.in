@@ -5,3 +5,6 @@ pydantic-settings==2.16.3
 PyJWT==2.15.1
 starlette==1.10.0
 anyio>=4.14.2
+
+# Async official REST; no heavy SDK in the private image.
+httpx==0.28.1

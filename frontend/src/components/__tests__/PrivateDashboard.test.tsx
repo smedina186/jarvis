@@ -19,7 +19,7 @@ describe("Private dashboard — phase 1", () => {
     render(<PrivateDashboard />);
     expect(screen.getByRole("heading", { name: "Bienvenido, Sebastián. ¿En qué trabajamos hoy?" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Mensaje a JARVIS" })).toBeDisabled();
-    expect(screen.getByText("IA sin configurar")).toBeInTheDocument();
+    expect(screen.getByText("Estado de Gemini sin verificar")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Backend privado conectado"));
     expect(fetch).toHaveBeenCalledWith("/api/backend/health", expect.objectContaining({ cache: "no-store" }));
   });
@@ -36,7 +36,7 @@ describe("Private dashboard — phase 1", () => {
     render(<PrivateDashboard />);
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 60)); });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/backend/health")).toHaveLength(1);
   });
 
   it("bounds a stalled request, prevents overlap and retries only on a manual click", async () => {

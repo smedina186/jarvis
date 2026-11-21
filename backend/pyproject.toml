@@ -50,7 +50,7 @@ dev = [
 ]
 
 [tool.setuptools]
-py-modules = ["config", "env_check", "main", "pipeline", "private_access", "private_main", "schemas", "tasks"]
+py-modules = ["config", "env_check", "main", "pipeline", "private_access", "private_main", "gemini_chat", "schemas", "tasks"]
 packages = ["agents", "capture", "db", "enrichment", "eval", "identification", "memory", "observability", "synthesis"]
 
 [tool.pytest.ini_options]

@@ -34,3 +34,30 @@ it("identifies missing backend configuration without exposing a signing secret",
   expect(data.error).toContain("Falta configurar el acceso privado");
   expect(data.error).not.toContain(process.env.JARVIS_BACKEND_AUTH_SECRET);
 });
+
+it("proxies chat only from the same origin and never accepts a provider key from the browser", async () => {
+  vi.stubEnv("AUTH_URL", "https://jarvis.example");
+  const { POST } = await import("@/app/api/backend/[...path]/route");
+  const context = { params: Promise.resolve({ path: ["chat"] }) };
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ text: "test", provider: "gemini" }));
+  vi.stubGlobal("fetch", fetchMock);
+  const cross = new Request("https://jarvis.example/api/backend/chat", { method: "POST", headers: { Origin: "https://other.example", "Content-Type": "application/json" }, body: "{}" });
+  expect((await POST(cross, context)).status).toBe(403);
+  expect(fetchMock).not.toHaveBeenCalled();
+  const valid = new Request("https://jarvis.example/api/backend/chat", { method: "POST", headers: { Origin: "https://jarvis.example", "Content-Type": "application/json", "x-goog-api-key": "never-forward-this" }, body: JSON.stringify({ messages: [{ role: "user", text: "hola" }] }) });
+  expect((await POST(valid, context)).status).toBe(200);
+  const forwarded = fetchMock.mock.calls[0][1];
+  expect(forwarded.headers.Authorization).toMatch(/^Bearer /);
+  expect(forwarded.headers["x-goog-api-key"]).toBeUndefined();
+});
+
+it("preserves Gemini quota and activation errors instead of redirecting to OAuth", async () => {
+  vi.stubEnv("AUTH_URL", "https://jarvis.example");
+  const { POST } = await import("@/app/api/backend/[...path]/route");
+  for (const status of [403, 429]) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ detail: "Provider blocked" }, { status, headers: { "Retry-After": "60" } })));
+    const response = await POST(new Request("https://jarvis.example/api/backend/chat", { method: "POST", headers: { Origin: "https://jarvis.example", "Content-Type": "application/json" }, body: "{}" }), { params: Promise.resolve({ path: ["chat"] }) });
+    expect(response.status).toBe(status);
+    expect(response.headers.get("Retry-After")).toBe("60");
+  }
+});

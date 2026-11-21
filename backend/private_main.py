@@ -1,12 +1,16 @@
 """Small private control plane. No vision, scraping, model downloads or agent startup."""
+
 from fastapi import FastAPI
 
 from config import get_settings
+from gemini_chat import GeminiChat
 from private_access import PrivateAccessMiddleware
 
 settings = get_settings()
 app = FastAPI(title="JARVIS privado", docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(PrivateAccessMiddleware, settings_factory=lambda: settings)
+gemini = GeminiChat(settings)
+app.include_router(gemini.router())
 
 
 @app.get("/api/health")
@@ -16,7 +20,7 @@ async def health() -> dict:
         "environment": settings.environment,
         "mode": "private",
         "capabilities": {
-            "chat": "not_configured",
+            "chat": "ready" if gemini.status()["enabled"] else "not_configured",
             "agents": "disabled",
             "face_recognition": "disabled",
             "personal_research": "disabled",
