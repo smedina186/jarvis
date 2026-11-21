@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity, Bot, CircleAlert, Clock3, Code2, FileText,
@@ -68,6 +68,12 @@ function ConnectionRow({ connection }: { connection: Connection }) {
 
 export default function PrivateDashboard() {
   const router = useRouter();
+  // Keep navigation current without making the health effect depend on router identity.
+  // RESEARCH/DECISION: use existing React refs and AbortController; no polling dependency.
+  const routerRef = useRef(router);
+  const healthRequest = useRef<AbortController | null>(null);
+  useEffect(() => { routerRef.current = router; }, [router]);
+  const [healthError, setHealthError] = useState("");
   const [section, setSection] = useState<Section>("chat");
   const [health, setHealth] = useState<BackendHealth>("checking");
   const [pending, setPending] = useState(false);
@@ -75,32 +81,52 @@ export default function PrivateDashboard() {
   const [latency, setLatency] = useState<number | null>(null);
 
   const check = useCallback(async () => {
+    if (healthRequest.current) return;
+    const controller = new AbortController();
+    healthRequest.current = controller;
+    const deadline = setTimeout(() => controller.abort(), 12000);
+    setHealthError("");
     setPending(true);
     setHealth("checking");
     const startedAt = performance.now();
     try {
       // This is the existing owner-protected proxy. Never call Render with browser secrets.
       const response = await fetch("/api/backend/health", {
-        cache: "no-store", signal: AbortSignal.timeout(12000),
+        cache: "no-store", signal: controller.signal,
       });
-      if (response.status === 401) { router.replace("/login"); return; }
+      if (healthRequest.current !== controller) return;
+      if (response.status === 401) { routerRef.current.replace("/login"); return; }
       const data: unknown = await response.json();
+      if (healthRequest.current !== controller) return;
       const verified = response.ok && typeof data === "object" && data !== null &&
         "status" in data && data.status === "ok";
       setHealth(verified ? "connected" : "error");
+      if (!verified) setHealthError(typeof data === "object" && data !== null &&
+        "error" in data && typeof data.error === "string" ? data.error : "No se pudo verificar el backend privado.");
       setLatency(verified ? Math.round(performance.now() - startedAt) : null);
     } catch {
+      if (healthRequest.current !== controller) return;
+      setHealthError(controller.signal.aborted
+        ? "La comprobación tardó más de 12 segundos. Espera un minuto y vuelve a intentarlo manualmente."
+        : "No se pudo contactar con Render. Vuelve a intentarlo manualmente.");
       setHealth("error");
       setLatency(null);
     } finally {
+      clearTimeout(deadline);
+      if (healthRequest.current !== controller) return;
+      healthRequest.current = null;
       setCheckedAt(new Date().toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" }));
       setPending(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     const initial = setTimeout(() => { void check(); }, 0);
-    return () => clearTimeout(initial);
+    return () => {
+      clearTimeout(initial);
+      healthRequest.current?.abort();
+      healthRequest.current = null;
+    };
   }, [check]);
 
   const connections: Connection[] = [
@@ -166,6 +192,7 @@ export default function PrivateDashboard() {
             <div className="jarvis-detail-heading"><Link2 size={25} aria-hidden="true" /><div><p className="private-eyebrow">DIAGNÓSTICO</p><h2 id="connections-title">Conexiones</h2></div></div>
             <p className="jarvis-muted">Los indicadores muestran únicamente estados verificables. No se realizan llamadas a modelos.</p>
             <ul className="jarvis-connection-list jarvis-detail-connections">{connections.map(item => <ConnectionRow key={item.label} connection={item} />)}</ul>
+            {healthError && <p className="jarvis-muted" role="alert">{healthError}</p>}
             <button type="button" className="private-button secondary jarvis-check" onClick={() => { void check(); }} disabled={pending}>
               <RefreshCw size={16} className={pending ? "jarvis-spin" : ""} aria-hidden="true" /> {pending ? "Comprobando…" : "Comprobar Render"}
             </button>
@@ -178,6 +205,7 @@ export default function PrivateDashboard() {
           <div className="jarvis-side-heading"><h2><ShieldCheck size={17} aria-hidden="true" /> Estado del sistema</h2><span className="jarvis-label-live">REAL</span></div>
           <ul className="jarvis-connection-list">{connections.map(item => <ConnectionRow key={item.label} connection={item} />)}</ul>
           <div className="jarvis-health-footer">
+            {healthError && <p role="alert">{healthError}</p>}
             <p role="status" aria-live="polite">{health === "connected" ? "Backend privado conectado" : health === "checking" ? "Comprobando conexión privada…" : "Backend privado sin conexión"}</p>
             <button type="button" className="private-button secondary jarvis-check" onClick={() => { void check(); }} disabled={pending}>
               <RefreshCw size={15} className={pending ? "jarvis-spin" : ""} aria-hidden="true" /> {pending ? "Comprobando…" : "Comprobar conexión"}
