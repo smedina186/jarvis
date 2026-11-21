@@ -61,7 +61,7 @@ async function proxy(
     const response = await fetch(new URL(`/api/${path.join("/")}`, target), {
       method, body,
       headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
-      cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(method === "POST" ? 25000 : 10000)]),
+      cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(method === "POST" ? 25000 : path.join("/") === "health" ? 55000 : 10000)]),
     });
     const data = await response.json();
     // Upstream JWT failure must not masquerade as a lost browser OAuth session.
@@ -78,7 +78,7 @@ async function proxy(
     if (!response.ok) return Response.json({ error: typeof data.detail === "string" ? data.detail : "Solicitud rechazada por el backend privado." }, { status: response.status, headers: resultHeaders });
     return Response.json(data, { status: response.status, headers: resultHeaders });
   } catch {
-    return Response.json({ error: "Private backend unavailable" }, { status: 502, headers });
+    return Response.json({ error: "No se pudo alcanzar Render. Free puede tardar cerca de un minuto en despertar. Reintenta después; si persiste, revisa el estado del servicio." }, { status: 502, headers });
   }
 }
 

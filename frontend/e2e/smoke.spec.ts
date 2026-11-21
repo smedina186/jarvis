@@ -6,6 +6,7 @@ test("anonymous visitors cannot access the panel or proxy", async ({ page, reque
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("button", { name: "Entrar con GitHub" })).toBeVisible();
   expect((await request.get("/api/backend/health")).status()).toBe(401);
+  expect((await request.get("/api/memory/key")).status()).toBe(401);
   expect((await request.get("/api/backend/gemini/status")).status()).toBe(401);
   expect((await request.post("/api/backend/chat", { data: {} })).status()).toBe(401);
   expect((await request.post("/api/backend/agents/research")).status()).toBe(403);
@@ -44,7 +45,7 @@ test("local owner test session connects to FastAPI and can sign out", async ({ p
   await expect(page.getByRole("heading", { name: "Bienvenido, Sebastián. ¿En qué trabajamos hoy?" })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("Backend privado conectado");
   await expect(page.getByRole("img", { name: "Núcleo visual de JARVIS" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Mensaje a JARVIS" })).toBeDisabled();
+  await expect(page.getByRole("textbox", { name: "Mensaje a JARVIS" })).toBeEnabled();
   // Local controlled protocol fixtures only. No Google calls or real API credentials.
   await page.route("**/api/backend/gemini/status", route => route.fulfill({ json: {
     state: "configured", enabled: true, verified: false, model: "gemini-3.5-flash-lite", detail: "Configuración de prueba local",
@@ -61,6 +62,17 @@ test("local owner test session connects to FastAPI and can sign out", async ({ p
   await page.getByRole("button", { name: "Enviar mensaje a Gemini" }).click();
   await expect(page.getByText("Respuesta controlada para prueba local", { exact: true }).last()).toBeVisible();
   expect(generated).toBe(1);
+  await page.getByRole("textbox", { name: "Mensaje a JARVIS" }).fill("Mi empresa vende muebles de oficina.");
+  await page.getByText(/^Memoria personal y de empresa/).click();
+  await page.getByLabel("Título del recuerdo", { exact: true }).fill("Empresa de prueba");
+  await page.getByRole("button", { name: "Guardar lo que acabo de contar" }).click();
+  await expect(page.getByText(/Guardado cifrado en este navegador/)).toBeVisible();
+  const cipher = await page.evaluate(() => localStorage.getItem("jarvis.memory.v1"));
+  expect(cipher).not.toContain("muebles"); expect(cipher).not.toContain("Empresa de prueba");
+  await page.reload();
+  await page.getByText(/^Memoria personal y de empresa/).click();
+  await expect(page.getByText("Empresa de prueba", { exact: true })).toBeVisible();
+  await page.getByLabel(/Usar mi memoria al responder/).check();
   await page.getByRole("switch", { name: "Modo voz" }).click();
   await expect(page.getByRole("button", { name: "Iniciar dictado" })).toBeDisabled();
   await page.getByLabel("Acepto usar el reconocimiento de voz del navegador").check();

@@ -32,7 +32,7 @@ it("does not call Gemini on mount and stays closed until explicitly enabled", ()
   );
   expect(
     screen.getByRole("textbox", { name: "Mensaje a JARVIS" }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   expect(fetch).not.toHaveBeenCalled();
 });
 it("sends a real protocol request only on submit and renders the provider response safely", async () => {
@@ -44,7 +44,9 @@ it("sends a real protocol request only on submit and renders the provider respon
   );
   const change = vi.fn();
   render(<GeminiConversation status={status} onStatus={change} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "hola" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Mensaje a JARVIS" }), {
+    target: { value: "hola" },
+  });
   fireEvent.click(
     screen.getByRole("button", { name: "Enviar mensaje a Gemini" }),
   );
@@ -68,12 +70,16 @@ it("shows quota errors, preserves the draft and does not retry automatically", a
     ),
   );
   render(<GeminiConversation status={status} onStatus={vi.fn()} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "hola" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Mensaje a JARVIS" }), {
+    target: { value: "hola" },
+  });
   fireEvent.click(
     screen.getByRole("button", { name: "Enviar mensaje a Gemini" }),
   );
   expect(await screen.findByRole("alert")).toHaveTextContent("Cuota agotada");
-  expect(screen.getByRole("textbox")).toHaveValue("hola");
+  expect(screen.getByRole("textbox", { name: "Mensaje a JARVIS" })).toHaveValue(
+    "hola",
+  );
   expect(
     screen.getByRole("button", { name: "Enviar mensaje a Gemini" }),
   ).toBeDisabled();
@@ -89,7 +95,9 @@ it("lets the user stop a pending request without freezing the page", async () =>
       }),
   );
   render(<GeminiConversation status={status} onStatus={vi.fn()} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "hola" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Mensaje a JARVIS" }), {
+    target: { value: "hola" },
+  });
   fireEvent.click(
     screen.getByRole("button", { name: "Enviar mensaje a Gemini" }),
   );
@@ -99,7 +107,11 @@ it("lets the user stop a pending request without freezing the page", async () =>
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Solicitud detenida",
   );
-  await waitFor(() => expect(screen.getByRole("textbox")).toBeEnabled());
+  await waitFor(() =>
+    expect(
+      screen.getByRole("textbox", { name: "Mensaje a JARVIS" }),
+    ).toBeEnabled(),
+  );
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 it("ends a stalled request at the deadline without retrying", async () => {
@@ -113,7 +125,9 @@ it("ends a stalled request at the deadline without retrying", async () => {
       }),
   );
   render(<GeminiConversation status={status} onStatus={vi.fn()} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "hola" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Mensaje a JARVIS" }), {
+    target: { value: "hola" },
+  });
   fireEvent.click(
     screen.getByRole("button", { name: "Enviar mensaje a Gemini" }),
   );
@@ -123,7 +137,9 @@ it("ends a stalled request at the deadline without retrying", async () => {
   expect(screen.getByRole("alert")).toHaveTextContent(
     "tiempo de espera agotado",
   );
-  expect(screen.getByRole("textbox")).toBeEnabled();
+  expect(
+    screen.getByRole("textbox", { name: "Mensaje a JARVIS" }),
+  ).toBeEnabled();
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 
@@ -138,7 +154,9 @@ it("provides keyboard dictation fallback without starting a microphone or sendin
   fireEvent.click(
     screen.getByRole("button", { name: "Usar dictado del teclado" }),
   );
-  expect(screen.getByRole("textbox")).toHaveFocus();
+  expect(
+    screen.getByRole("textbox", { name: "Mensaje a JARVIS" }),
+  ).toHaveFocus();
   expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -212,16 +230,20 @@ it("requires review and one submit after dictation, then reads only the received
       results: { length: 1, 0: { 0: { transcript: "Jarvis, buenos días" } } },
     }),
   );
-  expect(screen.getByRole("textbox")).toHaveValue("Jarvis, buenos días");
+  expect(screen.getByRole("textbox", { name: "Mensaje a JARVIS" })).toHaveValue(
+    "Jarvis, buenos días",
+  );
   expect(fetch).not.toHaveBeenCalled();
   act(() => Recognition.instance.onend?.());
-  fireEvent.change(screen.getByRole("textbox"), {
+  fireEvent.change(screen.getByRole("textbox", { name: "Mensaje a JARVIS" }), {
     target: { value: "Jarvis, buenos días. ¿Cómo estás?" },
   });
   fireEvent.click(
     screen.getByRole("button", { name: "Enviar mensaje a Gemini" }),
   );
-  fireEvent.submit(screen.getByRole("textbox").closest("form")!);
+  fireEvent.submit(
+    screen.getByRole("textbox", { name: "Mensaje a JARVIS" }).closest("form")!,
+  );
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(activity).toHaveBeenCalledWith("processing");
   await act(async () => {
@@ -240,4 +262,147 @@ it("requires review and one submit after dictation, then reads only the received
   expect(activity).toHaveBeenCalledWith("speaking");
   fireEvent.click(screen.getByRole("button", { name: "Detener voz" }));
   expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it("can dictate without Render and sends an automatic turn only after explicit session start", async () => {
+  class Recognition {
+    static instances: Recognition[] = [];
+    onresult: ((event: unknown) => void) | null = null;
+    onstart: (() => void) | null = null;
+    onend: (() => void) | null = null;
+    start = vi.fn();
+    stop = vi.fn();
+    abort = vi.fn();
+    constructor() {
+      Recognition.instances.push(this);
+    }
+  }
+  class Utterance {
+    onstart: (() => void) | null = null;
+    onend: (() => void) | null = null;
+    constructor(public text: string) {}
+  }
+  const spoken: Utterance[] = [];
+  vi.stubGlobal("SpeechRecognition", undefined);
+  vi.stubGlobal("webkitSpeechRecognition", Recognition);
+  vi.stubGlobal("SpeechSynthesisUtterance", Utterance);
+  vi.stubGlobal("speechSynthesis", {
+    speak: (u: Utterance) => spoken.push(u),
+    cancel: vi.fn(),
+    resume: vi.fn(),
+    getVoices: () => [],
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
+  vi.mocked(fetch).mockResolvedValue(
+    Response.json({
+      provider: "gemini",
+      text: "Respuesta real del transporte de prueba",
+    }),
+  );
+  const view = render(<GeminiConversation status={null} onStatus={vi.fn()} />);
+  fireEvent.click(screen.getByRole("switch", { name: "Modo voz" }));
+  fireEvent.click(
+    screen.getByLabelText("Acepto usar el reconocimiento de voz del navegador"),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Iniciar dictado" }),
+    ).toBeEnabled(),
+  );
+  expect(
+    screen.getByRole("button", { name: "Enviar mensaje a Gemini" }),
+  ).toBeDisabled();
+  view.rerender(<GeminiConversation status={status} onStatus={vi.fn()} />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Iniciar conversación automática" }),
+  );
+  const first = Recognition.instances[0];
+  act(() => {
+    first.onstart?.();
+    first.onresult?.({
+      results: {
+        length: 1,
+        0: { 0: { transcript: "Oye Jarvis, buenos días" } },
+      },
+    });
+  });
+  expect(fetch).not.toHaveBeenCalled();
+  await act(async () => {
+    first.onend?.();
+  });
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  expect(
+    JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string).messages[0]
+      .text,
+  ).toBe("buenos días");
+  await waitFor(() => expect(spoken).toHaveLength(1));
+  act(() => {
+    spoken[0].onstart?.();
+    spoken[0].onend?.();
+  });
+  await waitFor(() => expect(Recognition.instances).toHaveLength(2));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("button", { name: "Detener conversación" }));
+  expect(Recognition.instances[1].abort).toHaveBeenCalled();
+});
+
+it("runs the optional daily review once per day and stores the real test response encrypted", async () => {
+  const { webcrypto } = await import("node:crypto");
+  vi.stubGlobal("crypto", webcrypto);
+  vi.useFakeTimers();
+  localStorage.clear();
+  Object.defineProperty(navigator, "locks", {
+    configurable: true,
+    value: {
+      request: async (
+        _name: string,
+        _options: unknown,
+        run: (lock: object) => Promise<void>,
+      ) => run({}),
+    },
+  });
+  vi.mocked(fetch).mockImplementation(async (url) =>
+    url === "/api/memory/key"
+      ? Response.json({
+          owner: "123",
+          key: Buffer.alloc(32, 8).toString("base64"),
+        })
+      : Response.json({
+          provider: "gemini",
+          text: "Propuestas reales del transporte de prueba",
+        }),
+  );
+  const first = render(
+    <GeminiConversation status={status} onStatus={vi.fn()} />,
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(fetch).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByLabelText(/Autorizar una revisión gratuita al día/),
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(
+    vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/backend/chat"),
+  ).toHaveLength(1);
+  // Crypto completes outside fake timers; flush its actual promise before leaving.
+  await act(async () => {
+    await new Promise((resolve) =>
+      webcrypto.subtle.digest("SHA-256", new Uint8Array()).then(resolve),
+    );
+  });
+  first.unmount();
+  render(<GeminiConversation status={status} onStatus={vi.fn()} />);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  expect(
+    vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/backend/chat"),
+  ).toHaveLength(1);
+  localStorage.clear();
+  delete (navigator as unknown as Record<string, unknown>).locks;
 });

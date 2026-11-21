@@ -143,7 +143,11 @@ export function useBrowserVoice() {
     setVoiceURI(value);
     stopSpeech();
   }
-  function listen(draft: string, update: (text: string) => void) {
+  function listen(
+    draft: string,
+    update: (text: string) => void,
+    completed?: (text: string) => void,
+  ) {
     if (!prefs.current.mode || !prefs.current.consent || recognition.current)
       return;
     const w = window as VoiceWindow;
@@ -178,11 +182,13 @@ export function useBrowserVoice() {
         setListening(true);
       }
     };
+    let lastTranscript = "";
     instance.onresult = (event) => {
       if (!current()) return;
       let transcript = "";
       for (let i = 0; i < event.results.length; i++)
         transcript += `${event.results[i][0].transcript} `;
+      lastTranscript = transcript.trim();
       update(
         [draft.trim(), transcript.trim()]
           .filter(Boolean)
@@ -196,6 +202,7 @@ export function useBrowserVoice() {
         clearListenTimer();
         setStarting(false);
         setListening(false);
+        completed?.(lastTranscript);
       }
     };
     instance.onerror = (event) => {
@@ -250,7 +257,7 @@ export function useBrowserVoice() {
     }, 2000);
   }
 
-  function speak(text: string) {
+  function speak(text: string, completed?: () => void) {
     if (
       !prefs.current.mode ||
       prefs.current.muted ||
@@ -326,6 +333,7 @@ export function useBrowserVoice() {
         else {
           setSpeaking(false);
           setBeat(false);
+          completed?.();
         }
       };
       item.onerror = () => {

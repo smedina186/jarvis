@@ -22,6 +22,8 @@ const navItems = [
 ] as const;
 
 const agentProfiles = [
+  { label: "Ventas", Icon: Search },
+  { label: "Meta Ads", Icon: Activity },
   { label: "Investigación", Icon: Search },
   { label: "Programación", Icon: Code2 },
   { label: "Documentos", Icon: FileText },
@@ -89,7 +91,7 @@ export default function PrivateDashboard() {
     if (healthRequest.current) return;
     const controller = new AbortController();
     healthRequest.current = controller;
-    const deadline = setTimeout(() => controller.abort(), 12000);
+    const deadline = setTimeout(() => controller.abort(), 65000);
     setHealthError("");
     setPending(true);
     setHealth("checking");
@@ -121,7 +123,7 @@ export default function PrivateDashboard() {
     } catch {
       if (healthRequest.current !== controller) return;
       setHealthError(controller.signal.aborted
-        ? "La comprobación tardó más de 12 segundos. Espera un minuto y vuelve a intentarlo manualmente."
+        ? "La comprobación tardó más de 65 segundos. Espera un minuto y vuelve a intentarlo manualmente."
         : "No se pudo contactar con Render. Vuelve a intentarlo manualmente.");
       setHealth("error");
       setGemini(null);
@@ -176,9 +178,9 @@ export default function PrivateDashboard() {
         {section === "agentes" && (
           <section className="jarvis-detail" aria-labelledby="agents-title">
             <div className="jarvis-detail-heading"><Bot size={25} aria-hidden="true" /><div><p className="private-eyebrow">CAPACIDADES</p><h2 id="agents-title">Agentes</h2></div></div>
-            <div className="jarvis-empty-state"><CircleAlert size={19} aria-hidden="true" /> Aún no hay agentes conectados. No se ejecutarán tareas.</div>
+            <div className="jarvis-empty-state"><CircleAlert size={19} aria-hidden="true" /> Perfiles especializados para Gemini. No ejecutan acciones externas.</div>
             <ul className="jarvis-agent-grid">
-              {agentProfiles.map(({ label, Icon }) => <li key={label}><Icon size={20} aria-hidden="true" /><span>{label}</span><small>Inactivo</small></li>)}
+              {agentProfiles.map(({ label, Icon }) => <li key={label}><Icon size={20} aria-hidden="true" /><span>{label}</span><small>{gemini?.enabled ? "Disponible en el selector del chat" : "Pendiente de Gemini"}</small></li>)}
             </ul>
           </section>
         )}
@@ -213,7 +215,8 @@ export default function PrivateDashboard() {
           <ul className="jarvis-connection-list">{connections.map(item => <ConnectionRow key={item.label} connection={item} />)}</ul>
           <div className="jarvis-health-footer">
             {healthError && <p role="alert">{healthError}</p>}
-            <p role="status" aria-live="polite">{health === "connected" ? "Backend privado conectado" : health === "checking" ? "Comprobando conexión privada…" : "Backend privado sin conexión"}</p>
+            {pending && <button type="button" className="jarvis-text-link" onClick={() => healthRequest.current?.abort()}>Cancelar comprobación</button>}
+            <p role="status" aria-live="polite">{health === "connected" ? "Backend privado conectado" : health === "checking" ? "Despertando y comprobando Render Free (máximo 65 s)…" : "Backend privado sin conexión"}</p>
             <button type="button" className="private-button secondary jarvis-check" onClick={() => { void check(); }} disabled={pending}>
               <RefreshCw size={15} className={pending ? "jarvis-spin" : ""} aria-hidden="true" /> {pending ? "Comprobando…" : "Comprobar conexión"}
             </button>

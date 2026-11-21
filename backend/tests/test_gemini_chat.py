@@ -162,3 +162,39 @@ def test_new_routes_require_owner_and_do_not_open_legacy_tools(monkeypatch, owne
             client.post("/api/chat", headers=owner_headers, json={"messages": messages}).status_code
             == 422
         )
+
+
+def test_specialists_and_memory_are_grounded_without_tools():
+    from personal_agents import select_agent
+
+    assert select_agent("Ayúdame a vender muebles")[0] == "sales"
+    assert select_agent("Optimiza Meta Ads")[0] == "meta_ads"
+    assert select_agent("Corrige el código Python")[0] == "coding"
+    chat = service()
+
+    def handler(req):
+        payload = json.loads(req.content)
+        assert "No publiques anuncios" in payload["systemInstruction"]["parts"][0]["text"]
+        assert (
+            "no afirmes haber leído archivos completos"
+            in payload["contents"][0]["parts"][0]["text"]
+        )
+        assert "Muebles privados" in payload["contents"][0]["parts"][0]["text"]
+        assert "tools" not in payload
+        return httpx.Response(
+            200, json={"candidates": [{"content": {"parts": [{"text": "Respuesta de prueba"}]}}]}
+        )
+
+    chat.transport = httpx.MockTransport(handler)
+    result = asyncio.run(
+        chat.generate(
+            ChatRequest(
+                messages=[{"role": "user", "text": "Optimiza Meta Ads"}],
+                agent="meta_ads",
+                memories=[{"title": "Empresa", "text": "Muebles privados"}],
+                memory_index=["Empresa"],
+            )
+        )
+    )
+    assert result["agent"] == "meta_ads"
+    assert result["memory_sources"] == ["Empresa"]

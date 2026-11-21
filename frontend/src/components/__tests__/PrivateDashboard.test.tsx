@@ -18,7 +18,7 @@ describe("Private dashboard — phase 1", () => {
   it("shows the personal greeting without pretending a model is connected", async () => {
     render(<PrivateDashboard />);
     expect(screen.getByRole("heading", { name: "Bienvenido, Sebastián. ¿En qué trabajamos hoy?" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Mensaje a JARVIS" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Mensaje a JARVIS" })).toBeEnabled();
     expect(screen.getByText("Estado de Gemini sin verificar")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Backend privado conectado"));
     expect(fetch).toHaveBeenCalledWith("/api/backend/health", expect.objectContaining({ cache: "no-store" }));
@@ -27,7 +27,7 @@ describe("Private dashboard — phase 1", () => {
   it("changes tabs and keeps future features visibly inactive", () => {
     render(<PrivateDashboard />);
     fireEvent.click(screen.getByRole("button", { name: /^Agentes$/ }));
-    expect(screen.getByText("Aún no hay agentes conectados. No se ejecutarán tareas.")).toBeInTheDocument();
+    expect(screen.getByText("Perfiles especializados para Gemini. No ejecutan acciones externas.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^Misiones$/ }));
     expect(screen.getByText("No hay misiones activas")).toBeInTheDocument();
   });
@@ -50,9 +50,9 @@ describe("Private dashboard — phase 1", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Conexiones$/ }));
     expect(screen.getAllByRole("button", { name: "Comprobando…" })).toHaveLength(2);
     expect(fetch).toHaveBeenCalledTimes(1);
-    await act(async () => { await vi.advanceTimersByTimeAsync(12000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(65000); });
     expect(screen.getByRole("button", { name: "Comprobar conexión" })).toBeEnabled();
-    expect(screen.getAllByRole("alert")[0]).toHaveTextContent("más de 12 segundos");
+    expect(screen.getAllByRole("alert")[0]).toHaveTextContent("más de 65 segundos");
     await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
     expect(fetch).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Comprobar conexión" }));
