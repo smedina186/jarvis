@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import GeminiConversation, { type GeminiStatus } from "./GeminiConversation";
+import type { VoiceActivity } from "@/hooks/useBrowserVoice";
 
 type Section = "chat" | "agentes" | "misiones" | "conexiones";
 type BackendHealth = "checking" | "connected" | "error";
@@ -29,9 +30,9 @@ const agentProfiles = [
   { label: "Automatizaciones", Icon: Workflow },
 ] as const;
 
-function JarvisEye() {
+function JarvisEye({ activity, beat }: { activity: VoiceActivity; beat: boolean }) {
   return (
-    <div className="jarvis-eye-scene" aria-label="Núcleo visual de JARVIS" role="img">
+    <div className={`jarvis-eye-scene jarvis-eye-${activity} ${beat ? "jarvis-eye-beat" : ""}`} data-activity={activity} aria-label="Núcleo visual de JARVIS" role="img">
       <span className="jarvis-circuit jarvis-circuit-left" aria-hidden="true" />
       <span className="jarvis-circuit jarvis-circuit-right" aria-hidden="true" />
       <div className="jarvis-eye-halo" aria-hidden="true">
@@ -74,6 +75,8 @@ export default function PrivateDashboard() {
   const routerRef = useRef(router);
   const healthRequest = useRef<AbortController | null>(null);
   useEffect(() => { routerRef.current = router; }, [router]);
+  const [voiceActivity, setVoiceActivity] = useState<VoiceActivity>("idle");
+  const [voiceBeat, setVoiceBeat] = useState(false);
   const [gemini, setGemini] = useState<GeminiStatus | null>(null);
   const [healthError, setHealthError] = useState("");
   const [section, setSection] = useState<Section>("chat");
@@ -165,9 +168,9 @@ export default function PrivateDashboard() {
 
       <div className="jarvis-main-panel">
           <section className="jarvis-chat" hidden={section !== "chat"} aria-label="Panel principal">
-            <JarvisEye />
+            <JarvisEye activity={voiceActivity} beat={voiceBeat} />
             <h2 className="jarvis-greeting">Bienvenido, Sebastián. ¿En qué trabajamos hoy?</h2>
-            <GeminiConversation status={gemini} onStatus={setGemini} />
+            <GeminiConversation status={gemini} onStatus={setGemini} onActivity={setVoiceActivity} onBeat={setVoiceBeat} visible={section === "chat"} />
           </section>
 
         {section === "agentes" && (

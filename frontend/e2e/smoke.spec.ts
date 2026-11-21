@@ -21,6 +21,25 @@ test("local owner test session connects to FastAPI and can sign out", async ({ p
     name: "authjs.session-token", value: cookie, domain: "127.0.0.1", path: "/",
     httpOnly: true, sameSite: "Lax",
   }]);
+  // Explicit browser fixtures: no real microphone, speech service or Gemini call.
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.SpeechRecognition = undefined;
+    w.webkitSpeechRecognition = class {
+      onstart: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      onresult: ((event: unknown) => void) | null = null;
+      start() { queueMicrotask(() => { this.onstart?.(); this.onresult?.({ results: { length: 1, 0: { 0: { transcript: "Jarvis, buenos días. ¿Cómo estás?" } } } }); }); }
+      stop() { this.onend?.(); } abort() {}
+    };
+    w.SpeechSynthesisUtterance = class { constructor(public text: string) {} };
+    w.__voiceSpeakCount = 0;
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: {
+      getVoices: () => [{ voiceURI: "test-es", lang: "es-ES", name: "Jorge", localService: true }],
+      addEventListener() {}, removeEventListener() {}, cancel() {}, resume() {},
+      speak(item: { onstart?: () => void }) { w.__voiceSpeakCount = Number(w.__voiceSpeakCount) + 1; queueMicrotask(() => item.onstart?.()); },
+    } });
+  });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Bienvenido, Sebastián. ¿En qué trabajamos hoy?" })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("Backend privado conectado");
@@ -40,13 +59,29 @@ test("local owner test session connects to FastAPI and can sign out", async ({ p
   expect(generated).toBe(0);
   await page.getByRole("textbox", { name: "Mensaje a JARVIS" }).fill("Mensaje de prueba local");
   await page.getByRole("button", { name: "Enviar mensaje a Gemini" }).click();
-  await expect(page.getByText("Respuesta controlada para prueba local", { exact: true })).toBeVisible();
+  await expect(page.getByText("Respuesta controlada para prueba local", { exact: true }).last()).toBeVisible();
   expect(generated).toBe(1);
+  await page.getByRole("switch", { name: "Modo voz" }).click();
+  await expect(page.getByRole("button", { name: "Iniciar dictado" })).toBeDisabled();
+  await page.getByLabel("Acepto usar el reconocimiento de voz del navegador").check();
+  await page.getByRole("button", { name: "Iniciar dictado" }).click();
+  await expect(page.locator(".jarvis-eye-scene")).toHaveAttribute("data-activity", "listening");
+  await expect(page.getByRole("textbox", { name: "Mensaje a JARVIS" })).toHaveValue("Jarvis, buenos días. ¿Cómo estás?");
+  expect(generated).toBe(1);
+  await page.getByRole("button", { name: "Finalizar dictado" }).click();
+  await page.getByRole("textbox", { name: "Mensaje a JARVIS" }).fill("Jarvis, buenos días. ¿Cómo estás? Responde breve.");
+  await page.getByRole("button", { name: "Enviar mensaje a Gemini" }).click();
+  await expect(page.locator(".jarvis-eye-scene")).toHaveAttribute("data-activity", "speaking");
+  expect(generated).toBe(2);
+  expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__voiceSpeakCount)).toBe(1);
+  await page.getByRole("button", { name: "Detener voz" }).click();
+  await expect(page.locator(".jarvis-eye-scene")).toHaveAttribute("data-activity", "idle");
+  await page.getByRole("switch", { name: "Modo voz" }).click();
   await page.getByRole("button", { name: "Conexiones" }).click();
   await expect(page.getByRole("heading", { name: "Conexiones" })).toBeVisible();
   await expect(page.getByText("Integración de IA pendiente").first()).toBeVisible();
   await page.getByRole("button", { name: "Chat", exact: true }).click();
-  await expect(page.getByText("Respuesta controlada para prueba local", { exact: true })).toBeVisible();
+  await expect(page.getByText("Respuesta controlada para prueba local", { exact: true }).last()).toBeVisible();
   expect((await context.request.get("/api/backend/research/someone/stream")).status()).toBe(403);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Cerrar sesión" }).click();
