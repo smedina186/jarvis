@@ -82,6 +82,6 @@ it("requests mission recommendations from Gemini only after a user action, witho
   fireEvent.click(screen.getByRole("button", { name: "Pedir propuestas a Gemini" }));
   expect(await screen.findByText("Revisa el objetivo de ventas aportado.")).toBeInTheDocument();
   expect(fetch).toHaveBeenCalledTimes(1);
-  expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/backend/chat");
+  expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/backend/agents/run");
   expect(screen.queryByRole("button", { name: "Aprobar plan" })).not.toBeInTheDocument();
 });

@@ -27,7 +27,7 @@ def test_private_app_is_demo_only_and_does_not_expose_legacy_tools(private_clien
     response = private_client.get("/api/health", headers=owner_headers)
     assert response.status_code == 200
     assert response.json()["capabilities"] == {
-        "chat": "not_configured", "agents": "disabled", "face_recognition": "disabled",
+        "chat": "not_configured", "agents": "not_configured", "face_recognition": "disabled",
         "personal_research": "disabled", "realtime": "disabled",
     }
     assert private_client.post("/api/agents/research", headers=owner_headers).status_code == 403

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from config import get_settings
 from durable.routes import DurableRuntime
 from gemini_chat import GeminiChat
+from openjarvis_tools.runtime import AgentRuntime
 from private_access import PrivateAccessMiddleware
 
 settings = get_settings()
@@ -37,6 +38,8 @@ app.include_router(gemini.router())
 durable = DurableRuntime(settings)
 gemini.memory_runtime = durable
 app.include_router(durable.router())
+agent_runtime = AgentRuntime(gemini, durable)
+app.include_router(agent_runtime.router())
 
 
 @app.exception_handler(RequestValidationError)
@@ -56,7 +59,7 @@ async def health() -> dict:
         "mode": "private",
         "capabilities": {
             "chat": "ready" if gemini.status()["enabled"] else "not_configured",
-            "agents": "disabled",
+            "agents": "bounded_on_demand" if gemini.status()["enabled"] else "not_configured",
             "face_recognition": "disabled",
             "personal_research": "disabled",
             "realtime": "disabled",

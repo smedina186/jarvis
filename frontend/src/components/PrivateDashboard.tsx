@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import ServerMemory from "./ServerMemory";
+import AgentWorkbench from "./AgentWorkbench";
 import ServerMissions from "./ServerMissions";
 import GeminiConversation, { type GeminiStatus } from "./GeminiConversation";
 import type { VoiceActivity } from "@/hooks/useBrowserVoice";
@@ -192,6 +193,8 @@ export default function PrivateDashboard() {
           <section className="jarvis-detail" aria-labelledby="agents-title">
             <div className="jarvis-detail-heading"><Bot size={25} aria-hidden="true" /><div><p className="private-eyebrow">CAPACIDADES</p><h2 id="agents-title">Agentes</h2></div></div>
             <div className="jarvis-empty-state"><CircleAlert size={19} aria-hidden="true" /> Perfiles especializados para Gemini. No ejecutan acciones externas.</div>
+            <AgentWorkbench />
+            <h3>Especialistas de conversación</h3>
             <ul className="jarvis-agent-grid">
               {agentProfiles.map(({ id, label, Icon }) => <li key={label}><Icon size={20} aria-hidden="true" /><span>{label}</span><small>{id === "automation" ? "Ejecución externa desactivada" : gemini?.enabled ? "Especialista de Gemini; herramientas externas no habilitadas" : "Pendiente de Gemini"}</small><button type="button" className="jarvis-text-link" disabled={id === "automation"} onClick={() => { setSection("chat"); window.dispatchEvent(new CustomEvent("jarvis:select-agent", { detail: id })); }}>Conversar con {label}</button></li>)}
             </ul>

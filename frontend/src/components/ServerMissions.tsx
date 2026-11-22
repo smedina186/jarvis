@@ -46,8 +46,9 @@ export default function ServerMissions({ geminiEnabled = false }: { geminiEnable
     if (pending || controller.current) return;
     const abort = new AbortController(); controller.current = abort; setPending(true);
     try {
-      const r = await fetch("/api/backend/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        messages: [{ role: "user", text: `Propón hasta 3 misiones para este objetivo: ${goal || "Ayúdame a elegir el siguiente objetivo; pregunta si falta contexto"}. Para cada una incluye resultado esperado, primer paso, evidencia aportada, datos faltantes y aprobación necesaria. No tienes acceso a repositorios ni servicios externos. No inventes trabajos realizados ni confundas conexión con calidad. Las propuestas no se ejecutan automáticamente.` }], agent: "organization", ...(shareMemory ? { use_server_memory: true, project } : {}),
+      const r = await fetch("/api/backend/agents/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        agent: "organization", project, use_memory: shareMemory,
+        prompt: `Propón hasta 3 misiones para este objetivo: ${goal.slice(0, 1400) || "Ayúdame a elegir el siguiente objetivo; pregunta si falta contexto"}. Incluye resultado esperado, primer paso, evidencia, datos faltantes y aprobación necesaria. No inventes trabajos realizados. Las propuestas no se ejecutan automáticamente.`,
       }), signal: AbortSignal.any([abort.signal, AbortSignal.timeout(28000)]) });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "No se pudieron generar propuestas");

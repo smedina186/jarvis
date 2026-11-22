@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const headers = { "Cache-Control": "no-store, private" };
-const readablePaths = new Set(["health", "services", "gemini/status", "memory/status", "agents/registry"]);
+const readablePaths = new Set(["health", "services", "gemini/status", "memory/status", "agents/registry", "agents/tools"]);
 
 async function proxy(
   request: Request, context: { params: Promise<{ path: string[] }> }, method: "GET" | "POST",
@@ -19,7 +19,7 @@ async function proxy(
     return Response.json({ error: "Owner authentication required" }, { status: 401, headers });
   }
   const { path } = await context.params;
-  if (!(method === "GET" ? readablePaths.has(path.join("/")) : ["chat", "memory/operate", "missions/operate"].includes(path.join("/")))) {
+  if (!(method === "GET" ? readablePaths.has(path.join("/")) : ["chat", "memory/operate", "missions/operate", "agents/run"].includes(path.join("/")))) {
     return Response.json({ error: "This tool is disabled" }, { status: 403, headers });
   }
   let body: string | undefined;
@@ -88,6 +88,6 @@ export function GET(request: Request, context: { params: Promise<{ path: string[
 export async function POST(request: Request, context: { params: Promise<{ path: string[] }> }) {
   // Preserve the unconditional legacy-tool deny response; only chat may proceed to auth.
   const { path } = await context.params;
-  if (!["chat", "memory/operate", "missions/operate"].includes(path.join("/"))) return Response.json({ error: "Agent execution is disabled" }, { status: 403, headers });
+  if (!["chat", "memory/operate", "missions/operate", "agents/run"].includes(path.join("/"))) return Response.json({ error: "Agent execution is disabled" }, { status: 403, headers });
   return proxy(request, context, "POST");
 }

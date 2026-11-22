@@ -18,8 +18,14 @@ PRIVATE_READ_PATHS = {
     "/api/gemini/status",
     "/api/memory/status",
     "/api/agents/registry",
+    "/api/agents/tools",
 }
-PRIVATE_WRITE_PATHS = {"/api/chat", "/api/memory/operate", "/api/missions/operate"}
+PRIVATE_WRITE_PATHS = {
+    "/api/chat",
+    "/api/memory/operate",
+    "/api/missions/operate",
+    "/api/agents/run",
+}
 
 
 class PrivateAccessMiddleware:
