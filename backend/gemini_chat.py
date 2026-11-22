@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections import deque
 from datetime import UTC, datetime
 from time import monotonic
@@ -46,6 +47,8 @@ class ChatRequest(BaseModel):
         "analysis",
     ] = "auto"
     memories: list[MemorySnippet] = Field(default_factory=list, max_length=8)
+    use_server_memory: bool = False
+    project: str = Field(default="personal", pattern=r"^[a-zA-Z0-9_-]{1,40}$")
     memory_index: list[str] = Field(default_factory=list, max_length=32)
 
     @model_validator(mode="after")
@@ -67,6 +70,7 @@ class GeminiChat:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.memory_runtime = None
         self.transport: httpx.AsyncBaseTransport | None = None
         self.lock = asyncio.Lock()
         self.error: str | None = None
@@ -253,6 +257,110 @@ class GeminiChat:
 
         @router.post("/api/chat")
         async def chat(request: ChatRequest) -> dict:
-            return await self.generate(request)
+            memory_warning = None
+            current_text = request.messages[-1].text.strip()
+            is_memory_command = bool(
+                re.match(
+                    r"^(?:jarvis,?\s*)?(?:recuerda que|olvida (?:este )?recuerdo|"
+                    r"corrige (?:este )?recuerdo|borra toda mi memoria)",
+                    current_text,
+                    re.I,
+                )
+            )
+            if is_memory_command and not request.use_server_memory:
+                return {
+                    "provider": "memory",
+                    "text": "Activa memoria con consentimiento. No se guardó ni borró nada.",
+                }
+            if request.use_server_memory and self.memory_runtime:
+                latest = request.messages[-1].text.strip()
+                normalized = latest.casefold().strip("¿? .")
+                try:
+                    if normalized.startswith(("jarvis, recuerda que ", "recuerda que ")):
+                        from durable.service import MemoryInput
+
+                        content = re.sub(r"^(?:jarvis,\s*)?recuerda que\s+", "", latest, flags=re.I)
+                        saved = await self.memory_runtime.call(
+                            lambda m: m.remember(
+                                request.project, MemoryInput(content=content, source="explicit")
+                            )
+                        )
+                        return {
+                            "provider": "memory",
+                            "text": f"Guardado confirmado: {saved['id']}",
+                            "memory_id": saved["id"],
+                        }
+                    correction = re.match(
+                        r"^(?:jarvis,?\s*)?(corrige|olvida) (?:este )?recuerdo "
+                        r"([a-f0-9-]{36})(?::\s*(.+))?$",
+                        latest,
+                        re.I | re.S,
+                    )
+                    if correction:
+                        action, identifier, content = correction.groups()
+                        if action.lower() == "olvida":
+                            await self.memory_runtime.call(
+                                lambda m: m.forget(request.project, identifier)
+                            )
+                            return {
+                                "provider": "memory",
+                                "text": "Eliminación confirmada por el almacenamiento.",
+                            }
+                        from durable.service import MemoryInput
+
+                        await self.memory_runtime.call(
+                            lambda m: m.update_memory(
+                                request.project,
+                                identifier,
+                                MemoryInput(content=content or "", source="correction"),
+                            )
+                        )
+                        return {
+                            "provider": "memory",
+                            "text": "Corrección confirmada con versión anterior conservada.",
+                        }
+                    if normalized in {"que recuerdas de mi", "qué recuerdas de mí"}:
+                        items = await self.memory_runtime.call(
+                            lambda m: m.list_memories(request.project)
+                        )
+                        return {
+                            "provider": "memory",
+                            "text": "Recuerdos del proyecto: "
+                            + (
+                                "\n".join(
+                                    f"{m['id']}: {m['content']}"
+                                    for m in items[:8]
+                                    if m["state"] == "active"
+                                )
+                                or "no hay recuerdos activos"
+                            ),
+                        }
+                    if normalized in {"borra toda mi memoria", "jarvis, borra toda mi memoria"}:
+                        return {
+                            "provider": "memory",
+                            "text": "No se borró nada. Confirma desde Memoria.",
+                        }
+                    items = await self.memory_runtime.call(
+                        lambda m: m.recall(request.project, latest)
+                    )
+                    request.memories = [
+                        MemorySnippet(
+                            title=f"{m['kind']} · {m['source']} · {m['updated_at']}",
+                            text=m["content"][:1000],
+                        )
+                        for m in items[:5]
+                    ]
+                    request.memory_index = [m["id"] for m in items[:5]]
+                except Exception:
+                    if is_memory_command or "recuerdas de" in normalized:
+                        return {
+                            "provider": "memory",
+                            "text": "Memoria no disponible. No se confirmó ninguna operación.",
+                        }
+                    memory_warning = "Memoria no disponible; respuesta sin recuerdos del servidor."
+            result = await self.generate(request)
+            if memory_warning:
+                result["memory_warning"] = memory_warning
+            return result
 
         return router

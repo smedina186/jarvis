@@ -1,8 +1,11 @@
 """Small private control plane. No vision, scraping, model downloads or agent startup."""
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from config import get_settings
+from durable.routes import DurableRuntime
 from gemini_chat import GeminiChat
 from private_access import PrivateAccessMiddleware
 
@@ -11,6 +14,18 @@ app = FastAPI(title="JARVIS privado", docs_url=None, redoc_url=None, openapi_url
 app.add_middleware(PrivateAccessMiddleware, settings_factory=lambda: settings)
 gemini = GeminiChat(settings)
 app.include_router(gemini.router())
+durable = DurableRuntime(settings)
+gemini.memory_runtime = durable
+app.include_router(durable.router())
+
+
+@app.exception_handler(RequestValidationError)
+async def safe_validation(_request, _error):
+    return JSONResponse(
+        {"detail": "Entrada inválida: revisa tipos y límites"},
+        status_code=422,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/health")

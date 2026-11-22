@@ -11,8 +11,15 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from config import Settings
 
-PRIVATE_READ_PATHS = {"/api/health", "/api/services", "/api/tasks", "/api/gemini/status"}
-PRIVATE_WRITE_PATHS = {"/api/chat"}
+PRIVATE_READ_PATHS = {
+    "/api/health",
+    "/api/services",
+    "/api/tasks",
+    "/api/gemini/status",
+    "/api/memory/status",
+    "/api/agents/registry",
+}
+PRIVATE_WRITE_PATHS = {"/api/chat", "/api/memory/operate", "/api/missions/operate"}
 
 
 class PrivateAccessMiddleware:

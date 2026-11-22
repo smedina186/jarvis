@@ -41,6 +41,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+memory = ["memanto==0.3.0", "psycopg[binary]==3.3.9"]
 dev = [
   "httpx>=0.28.1",
   "httpx2>=2.0.0",
@@ -51,7 +52,7 @@ dev = [
 
 [tool.setuptools]
 py-modules = ["config", "env_check", "main", "pipeline", "private_access", "private_main", "gemini_chat", "personal_agents", "schemas", "tasks"]
-packages = ["agents", "capture", "db", "enrichment", "eval", "identification", "memory", "observability", "synthesis"]
+packages = ["durable","agents", "capture", "db", "enrichment", "eval", "identification", "memory", "observability", "synthesis"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

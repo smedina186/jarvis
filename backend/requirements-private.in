@@ -8,3 +8,7 @@ anyio>=4.14.2
 
 # Async official REST; no heavy SDK in the private image.
 httpx==0.28.1
+
+# Audited persistence clients; inactive until storage consent/configuration.
+memanto==0.3.0
+psycopg[binary]==3.3.9

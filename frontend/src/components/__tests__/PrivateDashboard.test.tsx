@@ -29,7 +29,7 @@ describe("Private dashboard — phase 1", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Agentes$/ }));
     expect(screen.getByText("Perfiles especializados para Gemini. No ejecutan acciones externas.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^Misiones$/ }));
-    expect(screen.getByText("No hay misiones activas")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Misiones reanudables" })).toBeInTheDocument();
   });
   it("checks once even when the router identity changes on every render", async () => {
     router.unstable = true;

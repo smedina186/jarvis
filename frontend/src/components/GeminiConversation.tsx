@@ -28,7 +28,11 @@ export type GeminiStatus = {
   detail: string;
   model: string;
 };
-type Message = { role: "user" | "assistant"; text: string };
+type Message = {
+  role: "user" | "assistant";
+  text: string;
+  provider?: "gemini" | "memory";
+};
 interface Props {
   status: GeminiStatus | null;
   onStatus: Dispatch<SetStateAction<GeminiStatus | null>>;
@@ -44,6 +48,7 @@ export default function GeminiConversation({
   visible = true,
 }: Props) {
   const vault = useMemoryVault();
+  const [useServerMemory, setUseServerMemory] = useState(false);
   const [useMemory, setUseMemory] = useState(false);
   const [specialist, setSpecialist] = useState("auto");
   const [memoryReport, setMemoryReport] = useState("");
@@ -220,7 +225,7 @@ export default function GeminiConversation({
     const deadline = setTimeout(() => controller.abort(), 28000);
     setPending(true);
     setError("");
-    let context = messages.slice(-18);
+    let context = messages.slice(-18).map(({ role, text }) => ({ role, text }));
     while (
       context.length &&
       context.reduce((n, m) => n + m.text.length, prompt.length) > 24000
@@ -242,6 +247,9 @@ export default function GeminiConversation({
           messages: [...context, { role: "user", text: prompt }],
           ...((agentOverride || specialist) !== "auto"
             ? { agent: agentOverride || specialist }
+            : {}),
+          ...(useServerMemory
+            ? { use_server_memory: true, project: "personal" }
             : {}),
           ...(memoryContext
             ? {
@@ -273,14 +281,18 @@ export default function GeminiConversation({
       if (
         typeof data.text !== "string" ||
         !data.text.trim() ||
-        data.provider !== "gemini"
+        !["gemini", "memory"].includes(data.provider)
       )
         throw new Error("Respuesta de Gemini inválida.");
       setMessages((previous) =>
         [
           ...previous,
           { role: "user" as const, text: prompt },
-          { role: "assistant" as const, text: data.text },
+          {
+            role: "assistant" as const,
+            text: data.text,
+            provider: data.provider,
+          },
         ].slice(-40),
       );
       setText("");
@@ -299,6 +311,7 @@ export default function GeminiConversation({
           );
         }
       }
+      if (data.memory_warning) setError(data.memory_warning);
       if (typeof data.agent === "string")
         setRouting(
           `${data.agent}: ${data.routing_reason || "Selección del orquestador"}`,
@@ -308,15 +321,16 @@ export default function GeminiConversation({
           if (session.current.active)
             setTimeout(() => listenLatest.current(), 300);
         });
-      onStatus(
-        (previous) =>
-          previous && {
-            ...previous,
-            state: "configured",
-            verified: true,
-            detail: "Respuesta real verificada.",
-          },
-      );
+      if (data.provider === "gemini")
+        onStatus(
+          (previous) =>
+            previous && {
+              ...previous,
+              state: "configured",
+              verified: true,
+              detail: "Respuesta real verificada.",
+            },
+        );
       if (data.truncated)
         setError(
           "La respuesta alcanzó el límite de longitud. Puedes pedir que continúe.",
@@ -386,6 +400,14 @@ export default function GeminiConversation({
           usa el botón manual.
         </p>
       </details>
+      <label className="voice-consent">
+        <input
+          type="checkbox"
+          checked={useServerMemory}
+          onChange={(e) => setUseServerMemory(e.target.checked)}
+        />{" "}
+        Consultar memoria del servidor (solo si está configurada y autorizada)
+      </label>
       <PersonalMemory
         vault={vault}
         draft={
@@ -587,7 +609,13 @@ export default function GeminiConversation({
               key={i}
               className={`gemini-message gemini-${message.role}`}
             >
-              <strong>{message.role === "user" ? "Tú" : "Gemini"}</strong>
+              <strong>
+                {message.role === "user"
+                  ? "Tú"
+                  : message.provider === "memory"
+                    ? "Memoria · confirmación del servidor"
+                    : "Gemini"}
+              </strong>
               <p>{message.text}</p>
             </article>
           ))}

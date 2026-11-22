@@ -8,6 +8,7 @@ RUN --mount=type=secret,id=build_ca \
     pip install --no-cache-dir --require-hashes -r requirements-private.txt \
     && useradd --create-home --uid 10001 jarvis
 COPY --chown=jarvis:jarvis config.py private_access.py private_main.py gemini_chat.py personal_agents.py ./
+COPY --chown=jarvis:jarvis durable ./durable
 USER jarvis
 EXPOSE 8000
 CMD ["sh", "-c", "exec uvicorn private_main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]

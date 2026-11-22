@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     owner_github_id: str = Field(default="", alias="JARVIS_OWNER_GITHUB_ID")
     backend_auth_secret: SecretStr = Field(default="", alias="JARVIS_BACKEND_AUTH_SECRET")
 
+    memory_mode: str = Field(default="disabled", alias="JARVIS_MEMORY_MODE")
+    memanto_mode: str = Field(default="disabled", alias="JARVIS_MEMANTO_MODE")
+    moorcheh_memory_key: SecretStr = Field(default="", alias="MOORCHEH_API_KEY")
+    memory_database_url: SecretStr = Field(default="", alias="JARVIS_MEMORY_DATABASE_URL")
+
     convex_url: str | None = Field(default=None, alias="CONVEX_URL")
     mongodb_uri: str | None = Field(default=None, alias="MONGODB_URI")
     exa_api_key: str | None = Field(default=None, alias="EXA_API_KEY")

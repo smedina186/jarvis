@@ -3,21 +3,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Activity, Bot, CircleAlert, Clock3, Code2, FileText,
+  Activity, Bot, CircleAlert, Code2, FileText,
   Layers3, Link2, ListTodo, LockKeyhole, MessageCircle, Plus,
   Radar, RefreshCw, Search, ShieldCheck, Workflow,
 } from "lucide-react";
 import Image from "next/image";
+import ServerMemory from "./ServerMemory";
+import ServerMissions from "./ServerMissions";
 import GeminiConversation, { type GeminiStatus } from "./GeminiConversation";
 import type { VoiceActivity } from "@/hooks/useBrowserVoice";
 
-type Section = "chat" | "agentes" | "misiones" | "conexiones";
+type Section = "chat" | "agentes" | "misiones" | "conexiones" | "memoria";
 type BackendHealth = "checking" | "connected" | "error";
 
 const navItems = [
   { key: "chat", label: "Chat", Icon: MessageCircle },
   { key: "agentes", label: "Agentes", Icon: Layers3 },
   { key: "misiones", label: "Misiones", Icon: Radar },
+  { key: "memoria", label: "Memoria", Icon: FileText },
   { key: "conexiones", label: "Conexiones", Icon: Link2 },
 ] as const;
 
@@ -185,16 +188,8 @@ export default function PrivateDashboard() {
           </section>
         )}
 
-        {section === "misiones" && (
-          <section className="jarvis-detail" aria-labelledby="missions-title">
-            <div className="jarvis-detail-heading"><Radar size={25} aria-hidden="true" /><div><p className="private-eyebrow">PROYECTOS</p><h2 id="missions-title">Misiones</h2></div></div>
-            <div className="jarvis-empty-state jarvis-mission-empty">
-              <Clock3 size={31} aria-hidden="true" />
-              <h3>No hay misiones activas</h3>
-              <p>La ejecución persistente y las aprobaciones se implementarán en una fase posterior.</p>
-            </div>
-          </section>
-        )}
+        {section === "misiones" && <ServerMissions />}
+        {section === "memoria" && <ServerMemory />}
 
         {section === "conexiones" && (
           <section className="jarvis-detail" aria-labelledby="connections-title">

@@ -1,0 +1,4 @@
+# Optional, NOT installed/activated in the current image. No provider access on install.
+# Review/approve external PostgreSQL hosting and Memanto/Moorcheh costs/privacy first.
+memanto==0.3.0
+psycopg[binary]==3.3.9
