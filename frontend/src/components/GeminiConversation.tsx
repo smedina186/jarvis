@@ -430,6 +430,7 @@ export default function GeminiConversation({
         </button>
         <p className="voice-help" role="note">{automatic ? "Escucha → Gemini → respuesta hablada. Sesión de hasta 6 turnos." : "Un toque para conversar. También puedes tocar el ojo. Sin escucha en segundo plano."}</p>
         {lastReply && voice.mode && !voice.speaking && <button type="button" className="jarvis-text-link" disabled={voice.muted || !voice.speechSupported || pending || voice.speechPending} onClick={() => { claps.pause(); voice.speak(lastReply); }}>Escuchar última respuesta</button>}
+        {voice.error && voice.speechSupported && <button type="button" className="private-button secondary" disabled={pending || voice.listening || voice.starting} onClick={() => { claps.pause(); voice.setMode(true); voice.setMuted(false); voice.speak(lastReply || "La voz de JARVIS está preparada. Pulsa Hablar con JARVIS para continuar."); }}>Reactivar voz</button>}
       </div>
       <details className="personal-memory"><summary>Activar con dos aplausos · opcional</summary>
         <p className="voice-help">Solo con JARVIS abierto y visible. Detector experimental de sonidos, no identificación de personas. No funciona con la pantalla bloqueada ni distingue perfectamente aplausos de otros golpes.</p>
@@ -593,7 +594,7 @@ export default function GeminiConversation({
               <button
                 type="button"
                 className="private-button secondary"
-                disabled={!voice.speaking}
+                disabled={!voice.speaking && !voice.speechPending}
                 onClick={voice.stopSpeech}
               >
                 <Square size={17} /> Detener voz

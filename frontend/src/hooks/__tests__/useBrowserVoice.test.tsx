@@ -8,12 +8,14 @@ class Recognition {
   interimResults = false;
   onstart: (() => void) | null = null;
   onend: (() => void) | null = null;
+  onspeechstart: (() => void) | null = null;
+  onspeechend: (() => void) | null = null;
   onerror: ((event: { error: string }) => void) | null = null;
   onresult:
     | ((event: {
         results: {
           length: number;
-          [n: number]: { [n: number]: { transcript: string } };
+          [n: number]: { isFinal?: boolean; [n: number]: { transcript: string } };
         };
       }) => void)
     | null = null;
@@ -87,7 +89,7 @@ it("transcribes Spanish through the WebKit API, preserves a draft and stops on w
   act(() => result.current.listen("Mi borrador.", update));
   const instance = Recognition.instances[0];
   expect(instance.lang).toBe("es-ES");
-  expect(instance.continuous).toBe(false);
+  expect(instance.continuous).toBe(true);
   act(() => instance.onstart?.());
   expect(result.current.listening).toBe(true);
   act(() =>
@@ -216,9 +218,10 @@ it("automatically delivers a stable voice turn once even when Safari delays end"
   const instance = Recognition.instances[0];
   const staleEnd = instance.onend;
   act(() => instance.onresult?.({ results: { length: 1, 0: { 0: { transcript: "Hola Jarvis" } } } }));
-  await act(async () => { await vi.advanceTimersByTimeAsync(1800); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(2800); });
   expect(completed).toHaveBeenCalledExactlyOnceWith("Hola Jarvis");
-  expect(instance.stop).toHaveBeenCalledTimes(1);
+  expect(instance.abort).toHaveBeenCalledTimes(1);
+  expect(instance.stop).not.toHaveBeenCalled();
   act(() => staleEnd?.());
   await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
   expect(completed).toHaveBeenCalledTimes(1);
@@ -307,4 +310,146 @@ it("refreshes available voices on playback and restores Safari playback routing"
   expect(session.type).toBe("playback");
   act(() => spoken[0].onend?.());
   expect(session.type).toBe("auto");
+});
+
+function heard(instance: Recognition, ...parts: { text: string; final?: boolean }[]) {
+  const results: { length: number; [n: number]: { isFinal?: boolean; [n: number]: { transcript: string } } } = { length: parts.length };
+  parts.forEach((part, index) => { results[index] = { isFinal: part.final, 0: { transcript: part.text } }; });
+  instance.onresult?.({ results });
+}
+
+it("keeps a full phrase through a short pause and replaces interim snapshots without duplicating finals", async () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useBrowserVoice());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  const update = vi.fn(), completed = vi.fn();
+  act(() => { result.current.setMode(true); result.current.setConsent(true); result.current.listen("", update, completed); });
+  const instance = Recognition.instances[0];
+  act(() => { heard(instance, { text: "Hola" }); instance.onspeechend?.(); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(700); });
+  expect(completed).not.toHaveBeenCalled();
+  act(() => { instance.onspeechstart?.(); heard(instance, { text: "Hola Jarvis,", final: true }, { text: "necesito organizar" }); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(completed).not.toHaveBeenCalled();
+  act(() => {
+    heard(instance, { text: "Hola Jarvis,", final: true }, { text: "necesito organizar las tareas de mi empresa", final: true });
+    instance.onspeechend?.();
+  });
+  expect(update).toHaveBeenLastCalledWith("Hola Jarvis, necesito organizar las tareas de mi empresa");
+  await act(async () => { await vi.advanceTimersByTimeAsync(2799); });
+  expect(completed).not.toHaveBeenCalled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+  expect(completed).toHaveBeenCalledExactlyOnceWith("Hola Jarvis, necesito organizar las tareas de mi empresa");
+  expect(instance.abort).toHaveBeenCalledTimes(1);
+});
+
+it("recovers short Safari disconnects inside one turn and ignores replayed phrases and stale events", async () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useBrowserVoice());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  const update = vi.fn(), completed = vi.fn();
+  act(() => { result.current.setMode(true); result.current.setConsent(true); result.current.listen("", update, completed); });
+  const first = Recognition.instances[0], staleEnd = first.onend, staleResult = first.onresult;
+  act(() => { heard(first, { text: "Hola", final: true }); first.onend?.(); });
+  expect(completed).not.toHaveBeenCalled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(150); });
+  const second = Recognition.instances[1];
+  expect(second.continuous).toBe(true);
+  act(() => { heard(second, { text: "Hola Jarvis quiero", final: true }); second.onend?.(); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(150); });
+  const third = Recognition.instances[2];
+  act(() => { heard(third, { text: "Jarvis quiero revisar las ventas", final: true }); third.onend?.(); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(2800); });
+  expect(Recognition.instances).toHaveLength(3);
+  expect(completed).toHaveBeenCalledExactlyOnceWith("Hola Jarvis quiero revisar las ventas");
+  act(() => { staleEnd?.(); staleResult?.({ results: { length: 1, 0: { 0: { transcript: "evento obsoleto" } } } }); });
+  expect(update).toHaveBeenLastCalledWith("Hola Jarvis quiero revisar las ventas");
+  expect(completed).toHaveBeenCalledTimes(1);
+});
+
+it("preserves partial transcription on recognition errors without sending or reconnecting", async () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useBrowserVoice());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  const update = vi.fn(), completed = vi.fn();
+  act(() => { result.current.setMode(true); result.current.setConsent(true); result.current.listen("", update, completed); });
+  act(() => { heard(Recognition.instances[0], { text: "Quiero preparar un informe de ventas" }); Recognition.instances[0].onerror?.({ error: "network" }); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect(update).toHaveBeenLastCalledWith("Quiero preparar un informe de ventas");
+  expect(result.current.error).toContain("La transcripción se conserva; no se ha enviado");
+  expect(completed).not.toHaveBeenCalled();
+  expect(Recognition.instances).toHaveLength(1);
+});
+
+it("never restarts an empty session or a canceled pending Safari reconnect", async () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useBrowserVoice());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  const completed = vi.fn();
+  act(() => { result.current.setMode(true); result.current.setConsent(true); result.current.listen("", vi.fn(), completed); });
+  act(() => Recognition.instances[0].onend?.());
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  expect(Recognition.instances).toHaveLength(1);
+  expect(completed).not.toHaveBeenCalled();
+  act(() => result.current.listen("", vi.fn(), completed));
+  act(() => { heard(Recognition.instances[1], { text: "No enviar" }); Recognition.instances[1].onend?.(); result.current.setConsent(false); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect(Recognition.instances).toHaveLength(2);
+  expect(completed).not.toHaveBeenCalled();
+});
+
+it("does not start or reconnect the microphone while the page is hidden", async () => {
+  vi.useFakeTimers();
+  const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+  try {
+    const { result } = renderHook(() => useBrowserVoice());
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    act(() => { result.current.setMode(true); result.current.setConsent(true); result.current.listen("", vi.fn(), vi.fn()); });
+    expect(Recognition.instances).toHaveLength(0);
+    hidden.mockReturnValue(false);
+    act(() => result.current.listen("", vi.fn(), vi.fn()));
+    act(() => { heard(Recognition.instances[0], { text: "Hola Jarvis" }); Recognition.instances[0].onend?.(); });
+    hidden.mockReturnValue(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(Recognition.instances).toHaveLength(1);
+    expect(result.current.starting).toBe(false);
+  } finally { hidden.mockRestore(); }
+});
+
+it("keeps the original 45 second deadline across Safari service reconnects", async () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useBrowserVoice());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  const completed = vi.fn();
+  act(() => { result.current.setMode(true); result.current.setConsent(true); result.current.listen("", vi.fn(), completed); });
+  const first = Recognition.instances[0];
+  act(() => heard(first, { text: "Hola" }));
+  for (let index = 1; index <= 22; index++) {
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    act(() => heard(first, { text: `Hola quiero revisar el proyecto y el paso ${index}` }));
+  }
+  act(() => first.onend?.());
+  await act(async () => { await vi.advanceTimersByTimeAsync(150); });
+  const second = Recognition.instances[1];
+  act(() => heard(second, { text: "incluyendo ventas" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(850); });
+  expect(completed).toHaveBeenCalledExactlyOnceWith("Hola quiero revisar el proyecto y el paso 22 incluyendo ventas");
+  expect(second.abort).toHaveBeenCalledTimes(1);
+  expect(Recognition.instances).toHaveLength(2);
+});
+
+it("retains final corrections after manual Finish and bounds engines that omit end", async () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useBrowserVoice());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  const update = vi.fn(), completed = vi.fn();
+  act(() => { result.current.setMode(true); result.current.setConsent(true); result.current.listen("Mi nota.", update, completed); });
+  const instance = Recognition.instances[0];
+  act(() => { heard(instance, { text: "revisar venta" }); result.current.finishListening(); });
+  expect(instance.stop).toHaveBeenCalledTimes(1);
+  act(() => heard(instance, { text: "revisar ventas", final: true }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  expect(update).toHaveBeenLastCalledWith("Mi nota. revisar ventas");
+  expect(completed).toHaveBeenCalledExactlyOnceWith("revisar ventas");
+  expect(instance.abort).toHaveBeenCalledTimes(1);
 });

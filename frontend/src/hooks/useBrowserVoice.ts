@@ -6,13 +6,14 @@ import { claimSpeech, ownsSpeech, releaseSpeech, setAudioSession, settleAudioSes
 export type VoiceActivity = "idle" | "listening" | "processing" | "speaking";
 type Results = {
   length: number;
-  [n: number]: { [n: number]: { transcript: string } };
+  [n: number]: { isFinal?: boolean; [n: number]: { transcript: string } };
 };
 interface Recognition {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
   onstart: (() => void) | null;
+  onspeechstart?: (() => void) | null;
   onspeechend?: (() => void) | null;
   onend: (() => void) | null;
   onerror: ((event: { error: string }) => void) | null;
@@ -53,6 +54,9 @@ export function useBrowserVoice() {
   const listenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silenceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restartTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listenSession = useRef<symbol | null>(null);
+  const finishTurn = useRef<(() => void) | null>(null);
   const engineWatch = useRef<ReturnType<typeof setInterval> | null>(null);
   const mounted = useRef(false);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
@@ -60,6 +64,7 @@ export function useBrowserVoice() {
   function clearListenTimer() {
     if (listenTimer.current) clearTimeout(listenTimer.current);
     if (silenceTimer.current) clearTimeout(silenceTimer.current);
+    if (restartTimer.current) clearTimeout(restartTimer.current);
   }
   function clearSpeechTimer() {
     if (speechTimer.current) clearTimeout(speechTimer.current);
@@ -68,12 +73,15 @@ export function useBrowserVoice() {
   function cancelListening() {
     const instance = recognition.current;
     recognition.current = null;
+    listenSession.current = null;
+    finishTurn.current = null;
     clearListenTimer();
     if (instance) {
       instance.onend = null;
       instance.onresult = null;
       instance.onerror = null;
       instance.onstart = null;
+      instance.onspeechstart = null;
       instance.onspeechend = null;
       try {
         instance.abort();
@@ -159,141 +167,168 @@ export function useBrowserVoice() {
     update: (text: string) => void,
     completed?: (text: string) => void,
   ) {
-    if (!prefs.current.mode || !prefs.current.consent || recognition.current)
+    if (!prefs.current.mode || !prefs.current.consent || listenSession.current || document.hidden)
       return;
     const w = window as VoiceWindow;
     const Constructor = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!Constructor) {
-      setError(
-        "Este navegador no ofrece reconocimiento. Usa el micrófono del teclado del iPad en el campo de mensaje.",
-      );
+      setError("Este navegador no ofrece reconocimiento. Usa el micrófono del teclado del iPad en el campo de mensaje.");
       return;
     }
-    stopSpeech(); // Never listen while JARVIS is reading aloud.
+    stopSpeech();
     setError("");
     setStarting(true);
-    let instance: Recognition;
-    try {
-      instance = new Constructor();
-    } catch {
-      setStarting(false);
-      setError(
-        "No se pudo abrir el reconocimiento. Usa el dictado del teclado.",
-      );
-      return;
-    }
-    recognition.current = instance;
-    const current = () => mounted.current && recognition.current === instance;
-    instance.lang = "es-ES";
-    instance.continuous = false;
-    instance.interimResults = true;
-    instance.onstart = () => {
-      if (current()) {
-        setStarting(false);
-        setListening(true);
+    const token = Symbol("voice-turn");
+    listenSession.current = token;
+    const valid = () => mounted.current && listenSession.current === token && prefs.current.mode && prefs.current.consent && !document.hidden;
+    let transcript = "", committed = "", sessionText = "";
+    let lastChange = Date.now(), restarts = 0, manualFinish = false, open = false;
+    // MDN: results is a session snapshot: final entries persist, interim entries
+    // are replaced. end means service disconnection, not that the user finished.
+    // https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognitionEvent/results
+    // https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition/end_event
+    const appendSession = (previous: string, next: string) => {
+      if (!previous) return next;
+      if (!next) return previous;
+      const a = previous.split(/\s+/), b = next.split(/\s+/);
+      const key = (word: string) => word.toLocaleLowerCase("es").replace(/[^\p{L}\p{N}]/gu, "");
+      // A restarted WebKit service can replay its previous phrase. Replace a
+      // full replay and overlapping phrases; do not append every interim event.
+      if (a.length <= b.length && a.every((word, i) => key(word) === key(b[i]))) return next;
+      if (b.length <= a.length && b.every((word, i) => key(word) === key(a[i]))) return previous;
+      let overlap = 0;
+      for (let count = 2; count <= Math.min(a.length, b.length); count++) {
+        if (a.slice(-count).every((word, i) => key(word) === key(b[i]))) overlap = count;
       }
+      return [...a, ...b.slice(overlap)].join(" ").slice(0, 6000);
     };
-    let lastTranscript = "";
-    let delivered = false;
-    const deliver = (stop = false) => {
-      if (!current() || delivered) return;
-      delivered = true;
-      recognition.current = null;
-      if (!ownsSpeech(speechOwner.current)) setAudioSession("auto");
-      clearListenTimer();
+    const detach = (instance: Recognition) => {
       instance.onresult = instance.onend = instance.onstart = instance.onerror = null;
-      instance.onspeechend = null;
-      if (stop) { try { instance.stop(); } catch { /* Already ended. */ } }
-      setStarting(false);
-      setListening(false);
-      completed?.(lastTranscript);
+      instance.onspeechstart = instance.onspeechend = null;
     };
-    instance.onresult = (event) => {
-      if (!current()) return;
-      let transcript = "";
-      for (let i = 0; i < event.results.length; i++)
-        transcript += `${event.results[i][0].transcript} `;
-      lastTranscript = transcript.trim().slice(0, 6000);
-      // Safari may keep the recognition session open after returning text.
-      // During an explicitly authorized conversation, stable text ends the turn.
-      // Draft dictation deliberately retains the manual review/send behavior.
-      if (completed && lastTranscript) {
+    const deliver = (abort = true) => {
+      if (listenSession.current !== token) return;
+      if (!valid()) { cancelListening(); return; }
+      const instance = recognition.current;
+      listenSession.current = null; recognition.current = null; finishTurn.current = null;
+      clearListenTimer();
+      if (instance) {
+        detach(instance);
+        // A stable automatic turn already has its latest hypothesis. Abort
+        // releases capture before Gemini/TTS instead of waiting for stop/end.
+        if (abort && open) { try { instance.abort(); } catch { /* Already ended. */ } }
+      }
+      settleAudioSession();
+      setStarting(false); setListening(false);
+      completed?.(transcript);
+    };
+    const pause = (delay = 2800) => {
+      if (!completed || !transcript || manualFinish) return;
+      if (silenceTimer.current) clearTimeout(silenceTimer.current);
+      silenceTimer.current = setTimeout(() => deliver(), delay);
+    };
+    const start = () => {
+      if (!valid()) { if (listenSession.current === token) cancelListening(); return; }
+      let instance: Recognition;
+      try { instance = new Constructor(); }
+      catch { setError("No se pudo abrir el reconocimiento. El texto se conserva; usa el dictado del teclado."); cancelListening(); return; }
+      recognition.current = instance;
+      const current = () => valid() && recognition.current === instance;
+      const finals = new Map<number, string>();
+      let nativeSpeech = false;
+      sessionText = "";
+      instance.lang = "es-ES";
+      instance.continuous = true;
+      instance.interimResults = true;
+      instance.onstart = () => { if (current()) { setStarting(false); setListening(true); } };
+      instance.onspeechstart = () => {
+        if (!current()) return;
+        nativeSpeech = true;
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
-        silenceTimer.current = setTimeout(() => deliver(true), 1800);
-      }
-      update(
-        [draft.trim(), transcript.trim()]
-          .filter(Boolean)
-          .join(" ")
-          .slice(0, 6000),
-      );
-    };
-    instance.onspeechend = () => {
-      if (completed && lastTranscript && current()) {
-        if (silenceTimer.current) clearTimeout(silenceTimer.current);
-        // Let final transcript corrections arrive before ending capture.
-        silenceTimer.current = setTimeout(() => deliver(true), 500);
-      }
-    };
-    instance.onend = () => {
-      deliver();
-    };
-    instance.onerror = (event) => {
-      if (!current()) return;
-      if (completed && lastTranscript && ["no-speech", "aborted"].includes(event.error)) {
-        deliver(true);
-        return;
-      }
-      const messages: Record<string, string> = {
-        "not-allowed":
-          "Permiso de micrófono denegado. Revisa los permisos de Safari o usa el dictado del teclado.",
-        "service-not-allowed":
-          "Safari no permite este servicio de reconocimiento. Usa el dictado del teclado.",
-        "audio-capture":
-          "No se pudo acceder al micrófono. Comprueba que esté disponible.",
-        "no-speech": "No se detectó voz. Puedes volver a pulsar el micrófono.",
-        network:
-          "El reconocimiento no pudo contactar con su servicio. Usa el dictado del teclado.",
+        // Keep a bounded fallback for engines omitting a subsequent speechend.
+        pause(6000);
       };
-      if (event.error !== "aborted")
-        setError(
-          messages[event.error] ||
-            "No se pudo transcribir. Usa el dictado del teclado.",
-        );
-      cancelListening();
-    };
-    try {
-      setAudioSession("play-and-record");
-      instance.start();
-      listenTimer.current = setTimeout(() => {
-        if (current()) {
-          if (completed && lastTranscript) { deliver(true); return; }
-          setError(
-            "La escucha terminó tras 45 segundos. Revisa la transcripción antes de enviar.",
-          );
-          cancelListening();
+      instance.onresult = (event) => {
+        if (!current()) return;
+        const slots = new Map(finals);
+        for (let i = 0; i < event.results.length; i++) {
+          const item = event.results[i];
+          const value = item[0]?.transcript?.trim() || "";
+          if (item.isFinal) finals.set(i, value);
+          slots.set(i, value);
         }
-      }, 45000);
-    } catch {
-      cancelListening();
-      setError(
-        "Safari no pudo iniciar el micrófono. Revisa sus permisos o utiliza el dictado del teclado.",
-      );
-    }
+        const snapshot = [...slots].sort(([a], [b]) => a - b).map(([, value]) => value).filter(Boolean).join(" ");
+        // Keep already heard text if a service drops its last interim at end.
+        if (!snapshot) return;
+        sessionText = snapshot;
+        const next = appendSession(committed, sessionText).slice(0, 6000);
+        if (next !== transcript) {
+          transcript = next; lastChange = Date.now();
+          update([draft.trim(), transcript].filter(Boolean).join(" ").slice(0, 6000));
+          pause(nativeSpeech ? 6000 : 2800);
+        }
+      };
+      instance.onspeechend = () => {
+        if (!current()) return;
+        nativeSpeech = false;
+        pause(); // A normal pause needs margin; never close after 500 ms.
+      };
+      instance.onend = () => {
+        if (!current()) return;
+        open = false; detach(instance);
+        committed = appendSession(committed, sessionText);
+        transcript = committed;
+        setListening(false);
+        if (!completed || manualFinish) { deliver(false); return; }
+        if (!transcript) {
+          setError("No se detectó voz. Puedes volver a pulsar el micrófono.");
+          cancelListening(); return;
+        }
+        const remaining = Math.max(0, 2800 - (Date.now() - lastChange));
+        if (!remaining) { deliver(false); return; }
+        pause(remaining);
+        // Recover only short service disconnects inside this authorized turn.
+        // No retry after errors, empty sessions, cancellation, or permission loss.
+        if (sessionText && restarts < 2) {
+          restarts++; setStarting(true);
+          restartTimer.current = setTimeout(start, 150);
+        } else setStarting(false);
+      };
+      instance.onerror = (event) => {
+        if (!current()) return;
+        const messages: Record<string, string> = {
+          "not-allowed": "Permiso de micrófono denegado. Revisa los permisos de Safari o usa el dictado del teclado.",
+          "service-not-allowed": "Safari no permite este servicio de reconocimiento. Usa el dictado del teclado.",
+          "audio-capture": "No se pudo acceder al micrófono. Comprueba que esté disponible.",
+          "no-speech": "No se detectó voz. Puedes volver a pulsar el micrófono.",
+          network: "El reconocimiento no pudo contactar con su servicio. Usa el dictado del teclado.",
+          aborted: "El reconocimiento se interrumpió. Pulsa el micrófono para continuar.",
+        };
+        setError((messages[event.error] || "No se pudo transcribir. Usa el dictado del teclado.") + (transcript ? " La transcripción se conserva; no se ha enviado." : ""));
+        cancelListening();
+      };
+      try { setAudioSession("play-and-record"); open = true; instance.start(); }
+      catch { setError("Safari no pudo iniciar el micrófono. La transcripción se conserva; pulsa el micrófono o utiliza el dictado del teclado."); cancelListening(); }
+    };
+    finishTurn.current = () => {
+      if (!valid()) { cancelListening(); return; }
+      manualFinish = true;
+      clearListenTimer();
+      if (!open || !recognition.current) { deliver(false); return; }
+      try { recognition.current.stop(); }
+      catch { deliver(); return; }
+      // Manual Finish gives the service a bounded chance to return final text.
+      if (listenSession.current === token) listenTimer.current = setTimeout(() => deliver(), 1000);
+    };
+    start();
+    if (listenSession.current === token) listenTimer.current = setTimeout(() => {
+      if (!valid()) { cancelListening(); return; }
+      if (completed && transcript) deliver();
+      else { setError("La escucha terminó tras 45 segundos. Revisa la transcripción antes de enviar."); cancelListening(); }
+    }, 45000);
   }
   function finishListening() {
-    const instance = recognition.current;
-    if (!instance) return;
-    try {
-      instance.stop();
-    } catch {
-      cancelListening();
-    }
-    clearListenTimer();
-    // Allow final recognition results; bound engines that never emit end.
-    listenTimer.current = setTimeout(() => {
-      if (recognition.current === instance) cancelListening();
-    }, 2000);
+    finishTurn.current?.();
   }
 
   function speak(text: string, completed?: () => void) {
@@ -350,14 +385,14 @@ export function useBrowserVoice() {
     }
     if (chunk.trim()) chunks.push(chunk.trim());
     if (!chunks.length) { stopSpeech(); setError("No hay texto legible para reproducir; la respuesta sigue en pantalla."); return; }
-    function next(index: number) {
+    function next(index: number, useDefaultVoice = false) {
       if (!mounted.current || !prefs.current.mode || prefs.current.muted)
         return;
       let item: SpeechSynthesisUtterance;
       try { item = new SpeechSynthesisUtterance(chunks[index]); }
       catch { stopSpeech(); setError("No se pudo abrir la voz del dispositivo; el texto se conserva."); return; }
       item.lang = selected?.lang || "es-ES";
-      if (selected) item.voice = selected;
+      if (selected && !useDefaultVoice) item.voice = selected;
       item.rate = 0.95;
       item.pitch = 1;
       item.volume = 1;
@@ -368,7 +403,7 @@ export function useBrowserVoice() {
         if (!current() || finished) return;
         finished = true;
         clearSpeechTimer(); utterance.current = null;
-        if (index + 1 < chunks.length) next(index + 1);
+        if (index + 1 < chunks.length) next(index + 1, useDefaultVoice);
         else {
           releaseSpeech(speechOwner.current, false);
           setSpeechPending(false); setSpeaking(false); setBeat(false);
@@ -399,12 +434,26 @@ export function useBrowserVoice() {
           if (++idleSamples >= 2) finish();
         }
       }, 200);
-      item.onerror = () => {
+      item.onerror = (event) => {
         if (current()) {
+          // A listed/downloadable voice is not necessarily playable on iPad.
+          // Retry only before any audio starts, once, with the native Spanish
+          // default. Never retry a permission denial or a partially read chunk.
+          if (!started && selected && !useDefaultVoice &&
+            ["voice-unavailable", "language-unavailable", "synthesis-failed"].includes(event?.error)) {
+            clearSpeechTimer();
+            utterance.current = null;
+            try { window.speechSynthesis.cancel(); } catch { /* Keep the text available. */ }
+            setSpeechEvent("Reintentando con la voz española predeterminada");
+            next(index, true);
+            return;
+          }
           stopSpeech();
-          setSpeechEvent("El motor devolvió un error de voz");
+          setSpeechEvent(`Error de voz del navegador: ${event?.error || "desconocido"}`);
           setError(
-            "Safari no pudo reproducir la voz. Pulsa Reproducir respuesta; también puedes leer el texto.",
+            event?.error === "not-allowed"
+              ? "Safari bloqueó la reproducción automática. Pulsa Reactivar voz para escuchar la respuesta; no se repetirá la consulta."
+              : "El dispositivo no pudo reproducir la voz. Pulsa Reactivar voz para reintentarlo; el texto se conserva.",
           );
         }
       };
@@ -413,7 +462,7 @@ export function useBrowserVoice() {
           stopSpeech();
           setSpeechEvent("Sin inicio confirmado del motor");
           setError(
-            "El dispositivo no inició la voz. Tu texto se conserva. Pulsa Escuchar última respuesta para reanudar el audio.",
+            "El dispositivo no inició la voz. Tu texto se conserva. Pulsa Reactivar voz para reanudar el audio.",
           );
         }
       }, 12000);

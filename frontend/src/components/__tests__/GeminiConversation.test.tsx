@@ -319,6 +319,7 @@ it("can dictate without Render and sends an automatic turn only after explicit s
   );
   expect(Recognition.instances).toHaveLength(0);
   expect(spoken[0].text).toBe("Te escucho.");
+  vi.useFakeTimers();
   act(() => { spoken[0].onstart?.(); spoken[0].onend?.(); });
   const first = Recognition.instances[0];
   act(() => {
@@ -332,19 +333,24 @@ it("can dictate without Render and sends an automatic turn only after explicit s
   });
   expect(fetch).not.toHaveBeenCalled();
   await act(async () => {
-    first.onend?.();
+    await vi.advanceTimersByTimeAsync(2799);
   });
-  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  expect(fetch).not.toHaveBeenCalled();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  expect(fetch).toHaveBeenCalledTimes(1);
   expect(
     JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string).messages[0]
       .text,
   ).toBe("buenos días");
-  await waitFor(() => expect(spoken).toHaveLength(2));
+  expect(spoken).toHaveLength(2);
   act(() => {
     spoken[1].onstart?.();
     spoken[1].onend?.();
   });
-  await waitFor(() => expect(Recognition.instances).toHaveLength(2));
+  await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+  expect(Recognition.instances).toHaveLength(2);
   expect(fetch).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole("button", { name: "Detener conversación" }));
   expect(Recognition.instances[1].abort).toHaveBeenCalled();
@@ -447,4 +453,56 @@ it("retains the owner's text before a failed request and excludes failed turns f
   fireEvent.click(screen.getByRole("button", { name: "Enviar mensaje a Gemini" }));
   await screen.findByText("Ahora sí recibí tu frase.");
   expect(JSON.parse(vi.mocked(fetch).mock.calls[1][1]?.body as string).messages).toEqual([{ role: "user", text: "No pierdas esta frase" }]);
+});
+
+it("recovers blocked device speech from a fresh tap without resending the received Gemini answer", async () => {
+  // Unit integration: the HTTP result and native speech events are fixtures.
+  // This checks recovery wiring; it does not claim an audible iPad test.
+  class Utterance {
+    onstart: (() => void) | null = null;
+    onend: (() => void) | null = null;
+    onerror: ((event: { error: string }) => void) | null = null;
+    constructor(public text: string) {}
+  }
+  const spoken: Utterance[] = [];
+  vi.stubGlobal("SpeechSynthesisUtterance", Utterance);
+  vi.stubGlobal("speechSynthesis", {
+    speak: (item: Utterance) => spoken.push(item),
+    cancel: vi.fn(),
+    resume: vi.fn(),
+    getVoices: () => [],
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
+  const answer = "Tu presupuesto sigue siendo cero dólares. ¿En qué proyecto trabajamos hoy?";
+  vi.mocked(fetch).mockResolvedValue(Response.json({ provider: "gemini", text: answer }));
+  const onStatus = vi.fn();
+  render(<GeminiConversation status={status} onStatus={onStatus} />);
+  fireEvent.click(screen.getByRole("switch", { name: "Modo voz" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Mensaje a JARVIS" }), {
+    target: { value: "¿Qué recuerdas de mi presupuesto?" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar mensaje a Gemini" }));
+  await screen.findByText(answer);
+  expect(spoken).toHaveLength(1);
+  act(() => spoken[0].onerror?.({ error: "not-allowed" }));
+
+  expect(screen.getByRole("alert")).toHaveTextContent(/voz|audio|reproducir/i);
+  expect(screen.getByText(answer)).toBeInTheDocument();
+  expect(screen.getByText("¿Qué recuerdas de mi presupuesto?", { selector: "p" })).toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(spoken).toHaveLength(1); // Never retry permission failures automatically.
+  expect(onStatus).toHaveBeenCalledTimes(1);
+  const receivedStatus = onStatus.mock.calls[0][0](status);
+  expect(receivedStatus).toMatchObject({ state: "configured", verified: true });
+  expect(receivedStatus.detail).toContain("contenido no auditado");
+
+  fireEvent.click(screen.getByRole("button", { name: "Reactivar voz" }));
+  expect(spoken).toHaveLength(2);
+  expect(spoken[1].text.trim()).toBe(answer);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  act(() => { spoken[1].onstart?.(); spoken[1].onend?.(); });
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Reactivar voz" })).toBeNull();
+  expect(onStatus).toHaveBeenCalledTimes(1);
 });

@@ -219,7 +219,7 @@ export default function PrivateDashboard() {
 
       <aside className="jarvis-sidebar" aria-label="Estado de JARVIS">
         <div className="jarvis-side-card">
-          <p className="voice-help" aria-label="Versión de JARVIS">Interfaz {process.env.NEXT_PUBLIC_JARVIS_RELEASE || "local"} · Audio r4</p>
+          <p className="voice-help" aria-label="Versión de JARVIS">Interfaz {process.env.NEXT_PUBLIC_JARVIS_RELEASE || "local"} · Audio r5</p>
           <div className="jarvis-side-heading"><h2><ShieldCheck size={17} aria-hidden="true" /> Estado del sistema</h2><span className="jarvis-label-live">REAL</span></div>
           <ul className="jarvis-connection-list">{connections.map(item => <ConnectionRow key={item.label} connection={item} />)}</ul>
           <div className="jarvis-health-footer">
