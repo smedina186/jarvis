@@ -75,3 +75,22 @@ su publicación. El push a esa rama activa despliegues existentes; no hacerlo co
 si fuera solo una copia de seguridad. No se requieren variables nuevas ni que el
 propietario vuelva a copiar credenciales. Gemini, OAuth y memoria actuales siguen
 en producción sin esta revisión visual/conversacional.
+
+## Corrección de turnos de voz en Safari
+
+Los dos accesos principales (ojo/botón y micrófono del compositor) inician la misma
+sesión conversacional. El dictado manual queda explícitamente dentro de Ajustes,
+como «Dictar borrador sin enviar». En conversación, 1,8 s sin cambios en la
+transcripción cierra el turno aunque Safari no emita end; los callbacks tardíos
+se invalidan para impedir envíos duplicados. Cancelar limpia ese temporizador.
+Un error de no-speech tras recibir una frase conserva el turno ya capturado; los
+errores de permisos no lo envían. Se muestra el estado de escucha/procesamiento/
+lectura y el texto oído como confirmación, no como paso obligatorio de edición.
+
+La regresión frontend tiene 66 pruebas aprobadas, incluida cancelación durante la
+ventana de silencio y un único envío con end retrasado. Compilación y TypeScript
+correctos. No cambia backend, JWT, Gemini, datos persistentes, cuotas ni secretos.
+Las pruebas de audio siguen siendo fixtures; falta comprobar la secuencia física
+en Safari/iPadOS. Un navegador que bloquee reproducción o reapertura del micrófono
+puede seguir requiriendo un gesto explícito; no se promete comportamiento de Siri
+con la pantalla bloqueada.

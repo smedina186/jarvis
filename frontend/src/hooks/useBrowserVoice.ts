@@ -47,11 +47,13 @@ export function useBrowserVoice() {
   const utterance = useRef<SpeechSynthesisUtterance | null>(null);
   const listenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silenceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(false);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
   function clearListenTimer() {
     if (listenTimer.current) clearTimeout(listenTimer.current);
+    if (silenceTimer.current) clearTimeout(silenceTimer.current);
   }
   function clearSpeechTimer() {
     if (speechTimer.current) clearTimeout(speechTimer.current);
@@ -183,12 +185,31 @@ export function useBrowserVoice() {
       }
     };
     let lastTranscript = "";
+    let delivered = false;
+    const deliver = (stop = false) => {
+      if (!current() || delivered) return;
+      delivered = true;
+      recognition.current = null;
+      clearListenTimer();
+      instance.onresult = instance.onend = instance.onstart = instance.onerror = null;
+      if (stop) { try { instance.stop(); } catch { /* Already ended. */ } }
+      setStarting(false);
+      setListening(false);
+      completed?.(lastTranscript);
+    };
     instance.onresult = (event) => {
       if (!current()) return;
       let transcript = "";
       for (let i = 0; i < event.results.length; i++)
         transcript += `${event.results[i][0].transcript} `;
-      lastTranscript = transcript.trim();
+      lastTranscript = transcript.trim().slice(0, 6000);
+      // Safari may keep the recognition session open after returning text.
+      // During an explicitly authorized conversation, stable text ends the turn.
+      // Draft dictation deliberately retains the manual review/send behavior.
+      if (completed && lastTranscript) {
+        if (silenceTimer.current) clearTimeout(silenceTimer.current);
+        silenceTimer.current = setTimeout(() => deliver(true), 1800);
+      }
       update(
         [draft.trim(), transcript.trim()]
           .filter(Boolean)
@@ -197,16 +218,14 @@ export function useBrowserVoice() {
       );
     };
     instance.onend = () => {
-      if (current()) {
-        recognition.current = null;
-        clearListenTimer();
-        setStarting(false);
-        setListening(false);
-        completed?.(lastTranscript);
-      }
+      deliver();
     };
     instance.onerror = (event) => {
       if (!current()) return;
+      if (completed && lastTranscript && ["no-speech", "aborted"].includes(event.error)) {
+        deliver(true);
+        return;
+      }
       const messages: Record<string, string> = {
         "not-allowed":
           "Permiso de micrófono denegado. Revisa los permisos de Safari o usa el dictado del teclado.",
@@ -229,6 +248,7 @@ export function useBrowserVoice() {
       instance.start();
       listenTimer.current = setTimeout(() => {
         if (current()) {
+          if (completed && lastTranscript) { deliver(true); return; }
           setError(
             "La escucha terminó tras 45 segundos. Revisa la transcripción antes de enviar.",
           );

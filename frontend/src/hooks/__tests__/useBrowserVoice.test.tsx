@@ -205,3 +205,34 @@ it("speaks readable prose without Markdown symbols or code blocks", async () => 
   expect(spoken[0].text).toContain("Buenos días");
   expect(spoken[0].text).toContain("Código disponible en pantalla");
 });
+
+it("automatically delivers a stable voice turn once even when Safari delays end", async () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useBrowserVoice());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  const completed = vi.fn();
+  act(() => { result.current.setMode(true); result.current.setConsent(true); });
+  act(() => result.current.listen("", vi.fn(), completed));
+  const instance = Recognition.instances[0];
+  const staleEnd = instance.onend;
+  act(() => instance.onresult?.({ results: { length: 1, 0: { 0: { transcript: "Hola Jarvis" } } } }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(1800); });
+  expect(completed).toHaveBeenCalledExactlyOnceWith("Hola Jarvis");
+  expect(instance.stop).toHaveBeenCalledTimes(1);
+  act(() => staleEnd?.());
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect(completed).toHaveBeenCalledTimes(1);
+});
+
+it("does not send a transcript after the owner cancels during the silence window", async () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useBrowserVoice());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  const completed = vi.fn();
+  act(() => { result.current.setMode(true); result.current.setConsent(true); });
+  act(() => result.current.listen("", vi.fn(), completed));
+  act(() => Recognition.instances[0].onresult?.({ results: { length: 1, 0: { 0: { transcript: "No enviar" } } } }));
+  act(() => result.current.cancelListening());
+  await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+  expect(completed).not.toHaveBeenCalled();
+});

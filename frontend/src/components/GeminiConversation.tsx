@@ -181,12 +181,12 @@ export default function GeminiConversation({
     listenLatest.current = beginTurn;
   });
   useEffect(() => {
-    if (voice.error || !visible || !voice.mode || !voice.consent) {
+    if (voice.error || !visible || !voice.mode || !voice.consent || voice.muted) {
       session.current.active = false;
       const timer = setTimeout(() => setAutomatic(false), 0);
       return () => clearTimeout(timer);
     }
-  }, [voice.error, visible, voice.mode, voice.consent]);
+  }, [voice.error, visible, voice.mode, voice.consent, voice.muted]);
   useEffect(() => {
     const hide = () => {
       if (document.hidden) stopConversation();
@@ -617,6 +617,11 @@ export default function GeminiConversation({
             >
               <Keyboard size={17} /> Usar dictado del teclado
             </button>
+            <button type="button" className="jarvis-text-link" disabled={pending || automatic || !voice.consent || !voice.supported}
+              aria-label={voice.listening || voice.starting ? "Finalizar dictado" : "Iniciar dictado"}
+              onClick={() => voice.listening || voice.starting ? voice.finishListening() : voice.listen(text, setText)}>
+              Dictar borrador sin enviar
+            </button>
             <p className="voice-help">
               Revisa y corrige la transcripción en el mensaje antes de pulsar
               Enviar. Solo se envía automáticamente dentro de una sesión
@@ -625,10 +630,15 @@ export default function GeminiConversation({
           </>
         )}
       </details>
+      {automatic && <div className="jarvis-voice-stage" role="status" aria-live="polite">
+        <strong>{voice.listening ? "Te escucho…" : voice.starting ? "Abriendo micrófono…" : pending ? "JARVIS está pensando…" : voice.speaking ? "JARVIS está hablando…" : "Preparando el siguiente turno…"}</strong>
+        <p>Al hacer una pausa se envía tu frase, sin pulsar Enviar. Para salir, pulsa Detener conversación.</p>
+        {text && <p>He oído: {text}</p>}
+      </div>}
       {(voice.listening || voice.starting) && (
         <p className="voice-listening" role="status">
           {voice.starting ? "Solicitando micrófono…" : "Escuchando en español…"}{" "}
-          Pulsa Finalizar dictado para revisar el texto.
+          {automatic ? "Haz una pausa cuando termines; enviaré tu frase automáticamente." : "Pulsa Finalizar dictado para revisar el texto."}
         </p>
       )}
       {voice.error && (
@@ -687,19 +697,11 @@ export default function GeminiConversation({
         <button
           type="button"
           disabled={
-            pending || !voice.mode || !voice.consent || !voice.supported
+            pending && !automatic
           }
-          aria-label={
-            voice.listening || voice.starting
-              ? "Finalizar dictado"
-              : "Iniciar dictado"
-          }
-          aria-pressed={voice.listening || voice.starting}
-          onClick={() =>
-            voice.listening || voice.starting
-              ? voice.finishListening()
-              : voice.listen(text, setText)
-          }
+          aria-label={automatic ? "Detener conversación desde el micrófono" : "Conversar por voz"}
+          aria-pressed={automatic}
+          onClick={startVoiceSession}
         >
           <Mic size={20} />
         </button>

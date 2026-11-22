@@ -257,3 +257,6 @@ body::after {
 .jarvis-memory-group button { min-height: 44px; margin-right: 16px; }
 .jarvis-shell summary { cursor: pointer; min-height: 44px; padding: 10px 0; }
 .jarvis-shell details > p { overflow-wrap: anywhere; }
+.jarvis-voice-stage { padding: 18px; margin: 12px 0; border: 1px solid #c078f477; border-radius: 16px; background: #731ba322; text-align: center; }
+.jarvis-voice-stage strong { color: #ebd5ff; font-size: 1.2rem; }
+.jarvis-voice-stage p { color: #ccb7dc; font-size: .9rem; margin-top: 8px; }
