@@ -311,3 +311,16 @@ Validación de esta etapa: 11 pruebas de memoria aprobadas; migración PostgreSQ
 real e idempotente comprobada por Neon. La compilación y suite completa de la etapa
 anterior siguen documentadas; esta etapa solo añade SQL y documentación y no cambia
 el chat, la UI, OAuth ni dependencias. No se repitieron compilaciones sin cambios.
+
+### Corrección de conexión con pooler
+
+El conector Neon devolvió una URL pooled, aunque no se había solicitado pooling.
+La configuración anterior usaba `options` de inicio para statement_timeout y
+lock_timeout, incompatible con los parámetros de arranque admitidos por el pooler.
+Ahora ambos límites se fijan con set_config local a la transacción, antes de cada
+operación; funciona con conexiones directas y pooled. Se mantiene verify-full,
+con CA explícita de certifi (ya era dependencia fijada), sin desactivar TLS.
+La comprobación de inicio registra únicamente verified/failed y clase de excepción,
+nunca URL, contenido ni mensajes crudos del driver; si falla, Gemini sigue disponible.
+Regresión local: 48 pruebas de memoria, acceso privado, app privada y Gemini pasaron.
+La prueba del driver es un doble unitario; el probe de Render comprueba la DB real.

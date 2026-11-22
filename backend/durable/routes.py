@@ -1,6 +1,7 @@
 """Authenticated control plane. Disabled until a durable external store is authorized."""
 
 import asyncio
+import logging
 import threading
 from collections import deque
 from time import monotonic
@@ -126,7 +127,10 @@ class DurableRuntime:
                 ) from None
             except HTTPException:
                 raise
-            except Exception:
+            except Exception as exc:
+                logging.getLogger(__name__).warning(
+                    "durable_memory_failure type=%s", type(exc).__name__
+                )
                 self.error = "No se pudo verificar o completar el almacenamiento persistente"
                 raise HTTPException(503, self.error) from None
 

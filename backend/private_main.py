@@ -1,6 +1,9 @@
 """Small private control plane. No vision, scraping, model downloads or agent startup."""
 
-from fastapi import FastAPI
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -10,7 +13,24 @@ from gemini_chat import GeminiChat
 from private_access import PrivateAccessMiddleware
 
 settings = get_settings()
-app = FastAPI(title="JARVIS privado", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    if settings.memory_mode == "approved_external":
+        try:
+            await durable.call(lambda m: m.repository.read(m.owner, "personal", "memory"))
+            logging.getLogger("uvicorn.error").info("durable_memory_probe=verified")
+        except HTTPException:
+            logging.getLogger("uvicorn.error").warning(
+                "durable_memory_probe=failed; chat remains available"
+            )
+    yield
+
+
+app = FastAPI(
+    lifespan=lifespan, title="JARVIS privado", docs_url=None, redoc_url=None, openapi_url=None
+)
 app.add_middleware(PrivateAccessMiddleware, settings_factory=lambda: settings)
 gemini = GeminiChat(settings)
 app.include_router(gemini.router())

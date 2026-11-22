@@ -309,3 +309,31 @@ def test_optional_index_rehydrates_only_owned_records_and_primary_survives_index
     service.remember("p", MemoryInput(content="No perder registro canónico"))
     assert service.list_memories("p")
     assert service.index_state == "error_primary_record_preserved"
+
+
+def test_postgres_pooler_uses_transaction_limits_and_verified_ca(monkeypatch):
+    import types
+
+    import certifi
+
+    calls = []
+
+    class Connection:
+        def execute(self, query):
+            calls.append(query)
+
+        def close(self):
+            calls.append("closed")
+
+    def connect(url, **kwargs):
+        assert "options" not in kwargs
+        assert kwargs["sslmode"] == "verify-full"
+        assert kwargs["sslrootcert"] == certifi.where()
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg", types.SimpleNamespace(connect=connect))
+    repository = postgres_repository("postgresql://example.invalid/db")
+    connection = repository.connect()
+    assert "set_config('statement_timeout','4000',true)" in calls[0]
+    assert "set_config('lock_timeout','2000',true)" in calls[0]
+    connection.close()

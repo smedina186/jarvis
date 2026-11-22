@@ -115,12 +115,24 @@ def postgres_repository(url: str) -> SqlRepository:
         raise StoragePending("Falta instalar el extra de persistencia aprobado") from None
 
     def connect():
-        return psycopg.connect(
+        import certifi
+
+        connection = psycopg.connect(
             url,
             sslmode="verify-full",
-            sslrootcert="system",
+            sslrootcert=certifi.where(),
             connect_timeout=5,
-            options="-c statement_timeout=4000 -c lock_timeout=2000",
         )
+        try:
+            # Transaction-local limits work with both direct Postgres and PgBouncer.
+            # Startup options are rejected by Neon transaction pooling.
+            connection.execute(
+                "SELECT set_config('statement_timeout','4000',true), "
+                "set_config('lock_timeout','2000',true)"
+            )
+            return connection
+        except Exception:
+            connection.close()
+            raise
 
     return SqlRepository(connect)
