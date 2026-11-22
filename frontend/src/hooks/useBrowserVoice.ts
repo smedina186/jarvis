@@ -273,6 +273,7 @@ export function useBrowserVoice() {
     const available = voicesRef.current;
     const selected =
       available.find((v) => v.voiceURI === prefs.current.voiceURI) ||
+      available.find((v) => /premium|enhanced|mejorada|natural/i.test(v.name)) ||
       available.find(
         (v) =>
           v.localService &&
@@ -287,6 +288,11 @@ export function useBrowserVoice() {
     const chunks: string[] = [];
     let chunk = "";
     for (const word of text
+      .replace(/```[\s\S]*?```/g, " Código disponible en pantalla. ")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/(^|\n)\s*#{1,6}\s*/g, "$1")
+      .replace(/[*_`]/g, "")
+      .replace(/(^|\n)\s*[-•]\s*/g, "$1")
       .split(/\s+/)
       .flatMap((value) => value.match(/.{1,170}/gu) || [])) {
       if (chunk && chunk.length + word.length > 180) {
@@ -302,8 +308,8 @@ export function useBrowserVoice() {
       const item = new SpeechSynthesisUtterance(chunks[index]);
       item.lang = selected?.lang || "es-ES";
       if (selected) item.voice = selected;
-      item.rate = 1;
-      item.pitch = 0.95;
+      item.rate = 0.95;
+      item.pitch = 1;
       utterance.current = item;
       const current = () => mounted.current && utterance.current === item;
       item.onstart = () => {

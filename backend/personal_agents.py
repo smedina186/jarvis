@@ -42,6 +42,11 @@ AGENTS = {
         "Convierte objetivos en próximos pasos y borradores. No afirmes "
         "crear recordatorios o enviar mensajes.",
     ),
+    "archivist": (
+        "Archivista",
+        "Organiza recuerdos aportados, detecta contradicciones y propone correcciones. "
+        "No afirmes escribir o eliminar recuerdos salvo confirmación del almacenamiento.",
+    ),
     "analysis": (
         "Análisis",
         "Compara opciones con supuestos claros y calcula sobre datos "

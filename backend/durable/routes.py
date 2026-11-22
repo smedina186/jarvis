@@ -19,6 +19,7 @@ from durable.service import MemoryInput, MemoryService
 class Operation(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Literal[
+        "projects",
         "remember",
         "recall",
         "list",
@@ -177,6 +178,8 @@ class DurableRuntime:
         @router.post("/api/memory/operate")
         async def memory(request: Operation):
             def perform(service):
+                if request.action == "projects":
+                    return service.repository.projects(service.owner)
                 if request.action in {"remember", "update"} and request.memory is None:
                     raise ValueError("Falta recuerdo")
                 if request.action == "remember":

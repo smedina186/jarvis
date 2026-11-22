@@ -25,14 +25,15 @@ const navItems = [
 ] as const;
 
 const agentProfiles = [
-  { label: "Ventas", Icon: Search },
-  { label: "Meta Ads", Icon: Activity },
-  { label: "Investigación", Icon: Search },
-  { label: "Programación", Icon: Code2 },
-  { label: "Documentos", Icon: FileText },
-  { label: "Organización", Icon: ListTodo },
-  { label: "Análisis", Icon: Activity },
-  { label: "Automatizaciones", Icon: Workflow },
+  { id: "sales", label: "Ventas", Icon: Search },
+  { id: "meta_ads", label: "Meta Ads", Icon: Activity },
+  { id: "research", label: "Investigación", Icon: Search },
+  { id: "coding", label: "Programación", Icon: Code2 },
+  { id: "documents", label: "Documentos", Icon: FileText },
+  { id: "organization", label: "Organización", Icon: ListTodo },
+  { id: "analysis", label: "Análisis", Icon: Activity },
+  { id: "archivist", label: "Archivista", Icon: FileText },
+  { id: "automation", label: "Automatizaciones", Icon: Workflow },
 ] as const;
 
 function JarvisEye({ activity, beat }: { activity: VoiceActivity; beat: boolean }) {
@@ -83,6 +84,8 @@ export default function PrivateDashboard() {
   const [voiceActivity, setVoiceActivity] = useState<VoiceActivity>("idle");
   const [voiceBeat, setVoiceBeat] = useState(false);
   const [gemini, setGemini] = useState<GeminiStatus | null>(null);
+  const [memoryState, setMemoryState] = useState("unknown");
+  const [frontendHost, setFrontendHost] = useState("");
   const [healthError, setHealthError] = useState("");
   const [section, setSection] = useState<Section>("chat");
   const [health, setHealth] = useState<BackendHealth>("checking");
@@ -95,6 +98,7 @@ export default function PrivateDashboard() {
     const controller = new AbortController();
     healthRequest.current = controller;
     const deadline = setTimeout(() => controller.abort(), 65000);
+    setFrontendHost(window.location.hostname);
     setHealthError("");
     setPending(true);
     setHealth("checking");
@@ -119,10 +123,15 @@ export default function PrivateDashboard() {
         const providerResponse = await fetch("/api/backend/gemini/status", { cache: "no-store", signal: controller.signal });
         const provider = await providerResponse.json();
         if (healthRequest.current !== controller) return;
-        if (providerResponse.ok && ["configured", "not_configured", "error"].includes(provider.state)) setGemini(provider);
+        if (providerResponse.ok && ["configured", "not_configured", "error"].includes(provider.state)) setGemini((previous) => ({ ...provider, verified: provider.verified || previous?.verified || false }));
         else setGemini(null);
         } catch { if (healthRequest.current === controller) setGemini(null); }
-      } else setGemini(null);
+        try {
+          const memoryResponse = await fetch("/api/backend/memory/status", { cache: "no-store", signal: controller.signal });
+          const memory = await memoryResponse.json();
+          if (healthRequest.current === controller) setMemoryState(memoryResponse.ok && memory.state === "active" ? "connected" : memory.state === "pending" ? "missing" : "error");
+        } catch { if (healthRequest.current === controller) setMemoryState("error"); }
+      } else { setGemini(null); setMemoryState("unknown"); }
     } catch {
       if (healthRequest.current !== controller) return;
       setHealthError(controller.signal.aborted
@@ -151,12 +160,13 @@ export default function PrivateDashboard() {
 
   const connections: Connection[] = [
     { label: "GitHub OAuth", state: "connected", detail: "Sesión del propietario verificada" },
-    { label: "Netlify", state: "unknown", detail: "Comprobación externa pendiente" },
+    { label: "Netlify · interfaz", state: frontendHost === "jarvismedina.netlify.app" ? "connected" : "unknown", detail: frontendHost === "jarvismedina.netlify.app" ? "Esta página respondió desde Netlify; no verifica facturación" : "No se verificó el alojamiento de esta página" },
     { label: "Render", state: health === "connected" ? "connected" : health === "checking" ? "checking" : "error",
       detail: health === "connected" ? `Verificado${checkedAt ? ` · ${checkedAt}` : ""}${latency !== null ? ` · ${latency} ms` : ""}` :
         health === "error" ? `No responde a salud privada${checkedAt ? ` · ${checkedAt}` : ""}` : "Comprobando ruta privada…" },
-    { label: "Gemini", state: gemini?.state === "configured" ? "configured" : gemini?.state === "not_configured" ? "missing" : gemini?.state === "error" ? "error" : "unknown", detail: gemini?.detail || "Estado pendiente de verificar con Render" },
-    { label: "OpenAI / ChatGPT", state: "missing", detail: "Integración de IA pendiente" },
+    { label: "Gemini", state: gemini?.state === "configured" ? (gemini.verified ? "connected" : "configured") : gemini?.state === "not_configured" ? "missing" : gemini?.state === "error" ? "error" : "unknown", detail: gemini?.verified && gemini.state === "configured" ? "Respuesta recibida; contenido no auditado" : gemini?.detail || "Estado pendiente de verificar con Render" },
+    { label: "Neon · memoria", state: memoryState as Connection["state"], detail: memoryState === "connected" ? "Consulta autenticada al almacenamiento confirmada" : "Almacenamiento pendiente de comprobar" },
+    { label: "OpenAI / ChatGPT", state: "missing", detail: "Sin API gratuita autorizada; la suscripción personal no la activa" },
   ];
 
   return (
@@ -173,7 +183,7 @@ export default function PrivateDashboard() {
 
       <div className="jarvis-main-panel">
           <section className="jarvis-chat" hidden={section !== "chat"} aria-label="Panel principal">
-            <JarvisEye activity={voiceActivity} beat={voiceBeat} />
+            <button type="button" className="jarvis-eye-button" aria-label="Hablar con JARVIS desde el ojo" onClick={() => window.dispatchEvent(new Event("jarvis:start-voice"))}><JarvisEye activity={voiceActivity} beat={voiceBeat} /></button>
             <h2 className="jarvis-greeting">Bienvenido, Sebastián. ¿En qué trabajamos hoy?</h2>
             <GeminiConversation status={gemini} onStatus={setGemini} onActivity={setVoiceActivity} onBeat={setVoiceBeat} visible={section === "chat"} />
           </section>
@@ -183,12 +193,12 @@ export default function PrivateDashboard() {
             <div className="jarvis-detail-heading"><Bot size={25} aria-hidden="true" /><div><p className="private-eyebrow">CAPACIDADES</p><h2 id="agents-title">Agentes</h2></div></div>
             <div className="jarvis-empty-state"><CircleAlert size={19} aria-hidden="true" /> Perfiles especializados para Gemini. No ejecutan acciones externas.</div>
             <ul className="jarvis-agent-grid">
-              {agentProfiles.map(({ label, Icon }) => <li key={label}><Icon size={20} aria-hidden="true" /><span>{label}</span><small>{gemini?.enabled ? "Disponible en el selector del chat" : "Pendiente de Gemini"}</small></li>)}
+              {agentProfiles.map(({ id, label, Icon }) => <li key={label}><Icon size={20} aria-hidden="true" /><span>{label}</span><small>{id === "automation" ? "Ejecución externa desactivada" : gemini?.enabled ? "Especialista de Gemini; herramientas externas no habilitadas" : "Pendiente de Gemini"}</small><button type="button" className="jarvis-text-link" disabled={id === "automation"} onClick={() => { setSection("chat"); window.dispatchEvent(new CustomEvent("jarvis:select-agent", { detail: id })); }}>Conversar con {label}</button></li>)}
             </ul>
           </section>
         )}
 
-        {section === "misiones" && <ServerMissions />}
+        {section === "misiones" && <ServerMissions geminiEnabled={Boolean(gemini?.enabled)} />}
         {section === "memoria" && <ServerMemory />}
 
         {section === "conexiones" && (
@@ -219,7 +229,7 @@ export default function PrivateDashboard() {
         </div>
         <div className="jarvis-side-card jarvis-next-card">
           <h2><ListTodo size={17} aria-hidden="true" /> Misiones</h2>
-          <p>Sin misiones en ejecución.</p>
+          <p>No hay ejecutor continuo. Consulta planes y checkpoints en Misiones.</p>
           <button className="jarvis-text-link" type="button" onClick={() => setSection("misiones")}>Ver misiones <Plus size={15} aria-hidden="true" /></button>
         </div>
         <div className="jarvis-watermark" aria-label="Emblema personal: perro con ojo azul y 186">

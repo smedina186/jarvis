@@ -244,3 +244,16 @@ body::after {
 .card-arrival {
   animation: cardArrival 0.5s ease-out;
 }
+
+/* Private assistant: keep the approved purple design, simplify touch controls. */
+.jarvis-eye-button { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.jarvis-eye-button:focus-visible { outline: 2px solid #dfa5ff; outline-offset: 4px; border-radius: 24px; }
+.jarvis-talk-bar { margin: 1rem 0; text-align: center; }
+.jarvis-talk { min-height: 56px; min-width: 220px; justify-content: center; gap: 10px; background: linear-gradient(120deg,#8c24b8,#592076); }
+.jarvis-memory-folders { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+.jarvis-memory-folders [aria-pressed="true"] { border-color: #d484ff; box-shadow: 0 0 12px #ad48df33; }
+.jarvis-memory-group { margin: 12px 0; padding: 12px; border: 1px solid #a15aca44; border-radius: 12px; }
+.jarvis-memory-group li { padding: 10px 0; overflow-wrap: anywhere; }
+.jarvis-memory-group button { min-height: 44px; margin-right: 16px; }
+.jarvis-shell summary { cursor: pointer; min-height: 44px; padding: 10px 0; }
+.jarvis-shell details > p { overflow-wrap: anywhere; }

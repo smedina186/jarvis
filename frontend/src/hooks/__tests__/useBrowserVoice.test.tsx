@@ -195,3 +195,13 @@ it("cancels microphone and speech on unmount without saving audio", async () => 
   expect(Recognition.instances[0].abort).toHaveBeenCalled();
   expect(synth.cancel).toHaveBeenCalled();
 });
+
+it("speaks readable prose without Markdown symbols or code blocks", async () => {
+  const { result } = renderHook(() => useBrowserVoice());
+  await waitFor(() => expect(result.current.speechSupported).toBe(true));
+  act(() => result.current.setMode(true));
+  act(() => result.current.speak("### Buenos días\n**Presupuesto $0**. [Documento](https://example.com). ```token=secreto```"));
+  expect(spoken[0].text).not.toMatch(/[#*`]|token=|https:/);
+  expect(spoken[0].text).toContain("Buenos días");
+  expect(spoken[0].text).toContain("Código disponible en pantalla");
+});

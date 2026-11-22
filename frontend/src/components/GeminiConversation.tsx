@@ -123,6 +123,35 @@ export default function GeminiConversation({
     setAutomatic(false);
     voice.stopAll();
   }
+  const startVoiceLatest = useRef<() => void>(() => {});
+  function startVoiceSession() {
+    if (automatic) { stopConversation(); active.current?.abort(); return; }
+    if (!voice.supported) {
+      input.current?.focus();
+      setError("Safari no ofrece reconocimiento directo aquí. Pulsa el micrófono del teclado del iPad para dictar; JARVIS puede leer la respuesta con Modo voz.");
+      voice.setMode(true);
+      return;
+    }
+    if (!voice.consent && !window.confirm("¿Permites una conversación por voz? El navegador puede enviar audio a Apple/Google para transcribirlo. El texto se enviará a Gemini al terminar de hablar. JARVIS no guarda grabaciones. La sesión se detiene al salir o tras 6 turnos.")) return;
+    voice.setMode(true);
+    voice.setConsent(true);
+    voice.setMuted(false);
+    session.current = { active: true, turns: 0 };
+    setAutomatic(true);
+    setError("");
+    beginTurn();
+  }
+  useEffect(() => { startVoiceLatest.current = startVoiceSession; });
+  useEffect(() => {
+    const start = () => { if (visibleRef.current && !active.current) startVoiceLatest.current(); };
+    const select = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (["general","sales","meta_ads","coding","research","documents","organization","analysis","archivist"].includes(id)) setSpecialist(id);
+    };
+    window.addEventListener("jarvis:start-voice", start);
+    window.addEventListener("jarvis:select-agent", select);
+    return () => { window.removeEventListener("jarvis:start-voice", start); window.removeEventListener("jarvis:select-agent", select); };
+  }, []);
   function beginTurn() {
     if (
       !session.current.active ||
@@ -168,10 +197,11 @@ export default function GeminiConversation({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   function reviewPrompt() {
-    return `Prepara mi revisión diaria: 3 prioridades, riesgos y propuestas de mejora con pruebas. No tienes acceso al repositorio ni a servicios externos: no inventes auditorías o cambios. Estado observado: Gemini habilitado ${Boolean(status?.enabled)}, respuesta verificada ${Boolean(status?.verified)}, reconocimiento de voz disponible ${voice.supported}. Usa únicamente el contexto aportado y solicita la información faltante.`;
+    return `Prepara mi revisión diaria: 3 prioridades concretas, riesgos y propuestas. Usa objetivos, pendientes y recuerdos aportados; si no hay datos suficientes, pregunta por el objetivo del día en vez de inventar prioridades técnicas. No tienes acceso al repositorio ni a servicios externos: no inventes auditorías o cambios. El indicador de respuesta recibida solo prueba transporte con Gemini, NUNCA exactitud o calidad. La disponibilidad del micrófono no prueba que el usuario pueda dictar. Para cada propuesta separa evidencia aportada, supuesto y dato faltante.`;
   }
   useEffect(() => {
     const timer = setTimeout(() => {
+      setUseServerMemory(localStorage.getItem("jarvis.memory.serverConsent") === "true");
       setDailyEnabled(localStorage.getItem("jarvis.daily.enabled") === "true");
       setUseMemory(
         localStorage.getItem("jarvis.memory.allowGoogle") === "true",
@@ -201,7 +231,6 @@ export default function GeminiConversation({
     }, 1000);
     return () => clearTimeout(timer);
     // Uses latest chat callback. Never create a timer loop or run while hidden.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dailyEnabled, status?.enabled, visible]);
   async function send(
     override?: string,
@@ -328,7 +357,7 @@ export default function GeminiConversation({
               ...previous,
               state: "configured",
               verified: true,
-              detail: "Respuesta real verificada.",
+              detail: "Respuesta recibida de Gemini; contenido no auditado.",
             },
         );
       if (data.truncated)
@@ -362,6 +391,13 @@ export default function GeminiConversation({
       className="gemini-conversation"
       aria-label="Chat privado con Gemini"
     >
+      <div className="jarvis-talk-bar">
+        <button type="button" className="private-button jarvis-talk" disabled={pending && !automatic} aria-pressed={automatic} onClick={startVoiceSession}>
+          {automatic ? <Square size={22} /> : <Mic size={22} />} {automatic ? "Detener conversación" : "Hablar con JARVIS"}
+        </button>
+        <p className="voice-help" role="note">{automatic ? "Escucha → Gemini → respuesta hablada. Sesión de hasta 6 turnos." : "Un toque para conversar. También puedes tocar el ojo. Sin escucha en segundo plano."}</p>
+        {lastReply && voice.mode && !voice.speaking && <button type="button" className="jarvis-text-link" onClick={() => voice.speak(lastReply)}>Escuchar última respuesta</button>}
+      </div>
       <details className="personal-memory">
         <summary>Misiones y revisión diaria</summary>
         <p className="voice-help">
@@ -404,10 +440,11 @@ export default function GeminiConversation({
         <input
           type="checkbox"
           checked={useServerMemory}
-          onChange={(e) => setUseServerMemory(e.target.checked)}
+          onChange={(e) => { setUseServerMemory(e.target.checked); localStorage.setItem("jarvis.memory.serverConsent", String(e.target.checked)); }}
         />{" "}
         Consultar memoria del servidor (solo si está configurada y autorizada)
       </label>
+      <details><summary>Archivo cifrado de este navegador (opcional)</summary>
       <PersonalMemory
         vault={vault}
         draft={
@@ -419,6 +456,7 @@ export default function GeminiConversation({
           localStorage.setItem("jarvis.memory.allowGoogle", String(value));
         }}
       />
+      </details>
       <label className="specialist-select">
         Especialista
         <select
@@ -436,6 +474,7 @@ export default function GeminiConversation({
             ["documents", "Documentos"],
             ["organization", "Organización"],
             ["analysis", "Análisis"],
+            ["archivist", "Archivista"],
           ].map(([id, label]) => (
             <option key={id} value={id}>
               {label}
@@ -445,7 +484,7 @@ export default function GeminiConversation({
       </label>
       {routing && <p className="voice-help">{routing}</p>}
       {memoryReport && <p className="voice-help">{memoryReport}</p>}
-      <div className="voice-settings">
+      <details className="voice-settings"><summary>Ajustes de voz y dictado</summary>
         <label className="voice-switch">
           <input
             type="checkbox"
@@ -549,7 +588,7 @@ export default function GeminiConversation({
                   active.current?.abort();
                 }}
               >
-                Detener conversación
+                Finalizar sesión desde ajustes
               </button>
               <p className="voice-help">
                 {automatic
@@ -585,7 +624,7 @@ export default function GeminiConversation({
             </p>
           </>
         )}
-      </div>
+      </details>
       {(voice.listening || voice.starting) && (
         <p className="voice-listening" role="status">
           {voice.starting ? "Solicitando micrófono…" : "Escuchando en español…"}{" "}
@@ -614,7 +653,7 @@ export default function GeminiConversation({
                   ? "Tú"
                   : message.provider === "memory"
                     ? "Memoria · confirmación del servidor"
-                    : "Gemini"}
+                    : "JARVIS · Gemini"}
               </strong>
               <p>{message.text}</p>
             </article>

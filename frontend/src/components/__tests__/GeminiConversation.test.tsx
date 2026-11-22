@@ -406,3 +406,27 @@ it("runs the optional daily review once per day and stores the real test respons
   localStorage.clear();
   delete (navigator as unknown as Record<string, unknown>).locks;
 });
+
+it("opens a voice session from one explicit tap and honors rejected consent", async () => {
+  class Recognition {
+    start = vi.fn(); stop = vi.fn(); abort = vi.fn();
+    constructor() { instances.push(this); }
+  }
+  const instances: Recognition[] = [];
+  vi.stubGlobal("webkitSpeechRecognition", Recognition);
+  vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  render(<GeminiConversation status={status} onStatus={vi.fn()} />);
+  const button = screen.getByRole("button", { name: "Hablar con JARVIS" });
+  await waitFor(() => expect(button).toBeEnabled());
+  // Wait for feature detection, then deny the first request.
+  await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+  fireEvent.click(button);
+  expect(instances).toHaveLength(0);
+  fireEvent.click(button);
+  expect(instances).toHaveLength(1);
+  expect(instances[0].start).toHaveBeenCalledTimes(1);
+  expect(fetch).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Detener conversación" }));
+  expect(instances[0].abort).toHaveBeenCalledTimes(1);
+  vi.restoreAllMocks();
+});

@@ -63,6 +63,7 @@ test("local owner test session connects to FastAPI and can sign out", async ({ p
   await expect(page.getByText("Respuesta controlada para prueba local", { exact: true }).last()).toBeVisible();
   expect(generated).toBe(1);
   await page.getByRole("textbox", { name: "Mensaje a JARVIS" }).fill("Mi empresa vende muebles de oficina.");
+  await page.getByText("Archivo cifrado de este navegador (opcional)", { exact: true }).click();
   await page.getByText(/^Memoria personal y de empresa/).click();
   await page.getByLabel("Título del recuerdo", { exact: true }).fill("Empresa de prueba");
   await page.getByRole("button", { name: "Guardar lo que acabo de contar" }).click();
@@ -70,9 +71,11 @@ test("local owner test session connects to FastAPI and can sign out", async ({ p
   const cipher = await page.evaluate(() => localStorage.getItem("jarvis.memory.v1"));
   expect(cipher).not.toContain("muebles"); expect(cipher).not.toContain("Empresa de prueba");
   await page.reload();
+  await page.getByText("Archivo cifrado de este navegador (opcional)", { exact: true }).click();
   await page.getByText(/^Memoria personal y de empresa/).click();
   await expect(page.getByText("Empresa de prueba", { exact: true })).toBeVisible();
   await page.getByLabel(/Usar mi memoria al responder/).check();
+  await page.getByText("Ajustes de voz y dictado", { exact: true }).click();
   await page.getByRole("switch", { name: "Modo voz" }).click();
   await expect(page.getByRole("button", { name: "Iniciar dictado" })).toBeDisabled();
   await page.getByLabel("Acepto usar el reconocimiento de voz del navegador").check();
@@ -91,7 +94,7 @@ test("local owner test session connects to FastAPI and can sign out", async ({ p
   await page.getByRole("switch", { name: "Modo voz" }).click();
   await page.getByRole("button", { name: "Conexiones" }).click();
   await expect(page.getByRole("heading", { name: "Conexiones" })).toBeVisible();
-  await expect(page.getByText("Integración de IA pendiente").first()).toBeVisible();
+  await expect(page.getByText("Sin API gratuita autorizada; la suscripción personal no la activa").first()).toBeVisible();
   await page.getByRole("button", { name: "Chat", exact: true }).click();
   await expect(page.getByText("Respuesta controlada para prueba local", { exact: true }).last()).toBeVisible();
   expect((await context.request.get("/api/backend/research/someone/stream")).status()).toBe(403);

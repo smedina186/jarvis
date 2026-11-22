@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 type Mission = {
   id: string;
   goal: string;
@@ -7,7 +7,10 @@ type Mission = {
   approval: { actor: string; at: string } | null;
   checkpoints: unknown[];
 };
-export default function ServerMissions() {
+export default function ServerMissions({ geminiEnabled = false }: { geminiEnabled?: boolean }) {
+  const [suggestions, setSuggestions] = useState("");
+  const [shareMemory, setShareMemory] = useState(false);
+  const controller = useRef<AbortController | null>(null);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [goal, setGoal] = useState("");
   const [project, setProject] = useState("personal");
@@ -39,10 +42,29 @@ export default function ServerMissions() {
       setPending(false);
     }
   }
+  async function recommend() {
+    if (pending || controller.current) return;
+    const abort = new AbortController(); controller.current = abort; setPending(true);
+    try {
+      const r = await fetch("/api/backend/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        messages: [{ role: "user", text: `Propón hasta 3 misiones para este objetivo: ${goal || "Ayúdame a elegir el siguiente objetivo; pregunta si falta contexto"}. Para cada una incluye resultado esperado, primer paso, evidencia aportada, datos faltantes y aprobación necesaria. No tienes acceso a repositorios ni servicios externos. No inventes trabajos realizados ni confundas conexión con calidad. Las propuestas no se ejecutan automáticamente.` }], agent: "organization", ...(shareMemory ? { use_server_memory: true, project } : {}),
+      }), signal: AbortSignal.any([abort.signal, AbortSignal.timeout(28000)]) });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "No se pudieron generar propuestas");
+      if (data.provider !== "gemini" || typeof data.text !== "string") throw new Error("No se recibió una propuesta de Gemini");
+      setSuggestions(data.text); setMessage("Propuestas recibidas de Gemini. No son acciones ejecutadas ni hechos auditados. Revisa y elige una meta antes de aprobar un plan.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Error al proponer misiones"); }
+    finally { controller.current = null; setPending(false); }
+  }
   return (
     <section className="jarvis-detail">
       <h2>Misiones reanudables</h2>
       <p className="voice-help">{message}</p>
+      <p className="voice-help">Pide ayuda a Gemini para decidir qué hacer. El ejecutor persistente actual solo revisa recuerdos; publicar, enviar mensajes o modificar archivos no está habilitado.</p>
+      <label className="voice-consent"><input type="checkbox" checked={shareMemory} onChange={(e) => setShareMemory(e.target.checked)} />Permitir a Gemini consultar los recuerdos pertinentes de este proyecto</label>
+      <button type="button" className="private-button secondary" disabled={pending || !geminiEnabled} onClick={() => void recommend()}>Pedir propuestas a Gemini</button>
+      {pending && controller.current && <button type="button" className="jarvis-text-link" onClick={() => controller.current?.abort()}>Detener propuestas</button>}
+      {suggestions && <article className="gemini-message"><h3>Propuestas para revisar</h3><p style={{ whiteSpace: "pre-wrap" }}>{suggestions}</p></article>}
       <fieldset disabled={pending} className="personal-memory">
         <label>
           Proyecto

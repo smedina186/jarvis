@@ -59,3 +59,29 @@ it("does not pretend a mission was created when storage rejects the operation", 
     screen.queryByRole("button", { name: "Aprobar plan" }),
   ).not.toBeInTheDocument();
 });
+
+it("automatically loads real protocol records into project folders and acknowledges refresh", async () => {
+  const record = { id: "id1", content: "Presupuesto $0", state: "active", kind: "preference", source: "explicit", conflicts: [] };
+  vi.stubGlobal("fetch", vi.fn(async (url, init) => {
+    if (url === "/api/backend/memory/status") return Response.json({ state: "active", memanto: "prepared_not_connected" });
+    const action = JSON.parse(init.body).action;
+    return Response.json(action === "projects" ? ["personal", "empresa"] : [record]);
+  }));
+  render(<ServerMemory />);
+  expect(await screen.findByText("Presupuesto $0")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /empresa/ })).toBeEnabled();
+  expect(screen.getByText("Conexión comprobada. Recuerdos cargados desde Neon.")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Comprobar memoria" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(6));
+});
+
+it("requests mission recommendations from Gemini only after a user action, without executing a mission", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ provider: "gemini", text: "Revisa el objetivo de ventas aportado." })));
+  render(<ServerMissions geminiEnabled />);
+  expect(fetch).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Pedir propuestas a Gemini" }));
+  expect(await screen.findByText("Revisa el objetivo de ventas aportado.")).toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/backend/chat");
+  expect(screen.queryByRole("button", { name: "Aprobar plan" })).not.toBeInTheDocument();
+});
