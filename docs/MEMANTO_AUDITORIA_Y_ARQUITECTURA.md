@@ -188,9 +188,11 @@ cómputo se suspende hasta el siguiente período; sus límites publicados no bor
 los datos. No se creó cuenta ni proyecto. Esta es persistencia externa, no un
 segundo backend JARVIS, y requiere consentimiento de transferencia de recuerdos.
 
-**Única decisión pendiente:** autorizar Neon Free para memoria/checkpoints y,
-si se desea activar Memanto, Moorcheh Cloud únicamente con créditos gratuitos,
-sin tarjeta, sin facturación y sin recargas. El índice es opcional y no condiciona
+**Autorización del propietario (2026-11-22):** Neon Free aprobado para
+memoria/checkpoints, sin tarjeta ni facturación. La conexión de la cuenta y
+verificación del proyecto Free siguen pendientes; la autorización no demuestra
+que ya exista una base. Memanto/Moorcheh no están autorizados para activación
+y permanecen desactivados. El índice es opcional y no condiciona
 la conservación de los datos canónicos. Una vez aprobados los proveedores y
 verificados en la cuenta real, se añadirían UNA VEZ en Render la URL de PostgreSQL
 y, si se autoriza el índice, MOORCHEH_API_KEY; modos pasan de disabled a los valores
