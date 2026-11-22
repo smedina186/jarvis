@@ -198,3 +198,89 @@ def test_specialists_and_memory_are_grounded_without_tools():
     )
     assert result["agent"] == "meta_ads"
     assert result["memory_sources"] == ["Empresa"]
+
+
+def test_slow_optional_memory_does_not_exhaust_chat_deadline_or_retry(monkeypatch):
+    """Router + actual HTTPX payload contract; slow memory and Google are test doubles."""
+    from fastapi import FastAPI
+
+    import gemini_chat
+
+    assert gemini_chat.OPTIONAL_MEMORY_LOOKUP_TIMEOUT_SECONDS == 2.0
+    monkeypatch.setattr(gemini_chat, "OPTIONAL_MEMORY_LOOKUP_TIMEOUT_SECONDS", 0.01)
+    chat = service()
+    calls = []
+    memory_cancelled = []
+
+    class SlowMemory:
+        async def call(self, _operation):
+            try:
+                await asyncio.sleep(0.1)
+            finally:
+                memory_cancelled.append(True)
+            raise AssertionError("Optional lookup must be cancelled before this point")
+
+    def handler(req):
+        calls.append(req)
+        payload = json.loads(req.content)
+        assert payload["contents"][0]["parts"][0]["text"] == "hola"
+        return httpx.Response(
+            200,
+            json={"candidates": [{"content": {"parts": [{"text": "Respuesta controlada"}]}}]},
+        )
+
+    chat.memory_runtime = SlowMemory()
+    chat.transport = httpx.MockTransport(handler)
+    app = FastAPI()
+    app.include_router(chat.router())
+    result = TestClient(app).post(
+        "/api/chat",
+        json={"messages": [{"role": "user", "text": "hola"}], "use_server_memory": True},
+    )
+    assert result.status_code == 200
+    assert result.json()["provider"] == "gemini"
+    assert "tardó demasiado" in result.json()["memory_warning"]
+    assert "sin recuerdos del servidor" in result.json()["memory_warning"]
+    assert memory_cancelled == [True]
+    assert len(calls) == 1
+
+
+def test_explicit_memory_write_is_not_cancelled_by_optional_read_budget(monkeypatch):
+    """A bounded read budget must never turn a write into a false timeout or retry."""
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+
+    import gemini_chat
+
+    monkeypatch.setattr(gemini_chat, "OPTIONAL_MEMORY_LOOKUP_TIMEOUT_SECONDS", 0.001)
+    chat = service()
+    saved = []
+
+    def remember(project, memory):
+        saved.append((project, memory.content))
+        return {"id": "unit-memory-confirmed"}
+
+    class SlowWrite:
+        async def call(self, operation):
+            await asyncio.sleep(0.02)
+            return operation(SimpleNamespace(remember=remember))
+
+    def forbidden_provider(_request):
+        raise AssertionError("Explicit memory commands must not call Gemini")
+
+    chat.memory_runtime = SlowWrite()
+    chat.transport = httpx.MockTransport(forbidden_provider)
+    app = FastAPI()
+    app.include_router(chat.router())
+    result = TestClient(app).post(
+        "/api/chat",
+        json={
+            "messages": [{"role": "user", "text": "Recuerda que prefiero morado"}],
+            "use_server_memory": True,
+        },
+    )
+    assert result.status_code == 200
+    assert result.json()["provider"] == "memory"
+    assert result.json()["memory_id"] == "unit-memory-confirmed"
+    assert saved == [("personal", "prefiero morado")]

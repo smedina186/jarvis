@@ -2,6 +2,7 @@
 // RESEARCH: MDN Web Speech APIs; react-speech-recognition reviewed (not needed here).
 // DECISION: Native feature detection, no SDK/polyfill, audio storage or paid service.
 import { useEffect, useRef, useState } from "react";
+import { claimSpeech, ownsSpeech, releaseSpeech, setAudioSession, settleAudioSession } from "@/lib/speech-focus";
 export type VoiceActivity = "idle" | "listening" | "processing" | "speaking";
 type Results = {
   length: number;
@@ -34,6 +35,9 @@ export function useBrowserVoice() {
   const [listening, setListening] = useState(false);
   const [starting, setStarting] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [speechPending, setSpeechPending] = useState(false);
+  const [speechEvent, setSpeechEvent] = useState("Sin prueba de voz");
+  const speechOwner = useRef(Symbol("jarvis-voice"));
   const [beat, setBeat] = useState(false);
   const [error, setError] = useState("");
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -49,6 +53,7 @@ export function useBrowserVoice() {
   const listenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silenceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const engineWatch = useRef<ReturnType<typeof setInterval> | null>(null);
   const mounted = useRef(false);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
@@ -58,6 +63,7 @@ export function useBrowserVoice() {
   }
   function clearSpeechTimer() {
     if (speechTimer.current) clearTimeout(speechTimer.current);
+    if (engineWatch.current) clearInterval(engineWatch.current);
   }
   function cancelListening() {
     const instance = recognition.current;
@@ -74,20 +80,21 @@ export function useBrowserVoice() {
       } catch {
         /* Already ended. */
       }
+      settleAudioSession();
     }
     if (mounted.current) {
       setListening(false);
       setStarting(false);
     }
   }
-  function stopSpeech() {
+  function resetSpeech() {
     utterance.current = null;
     clearSpeechTimer();
-    window.speechSynthesis?.cancel();
-    if (mounted.current) {
-      setSpeaking(false);
-      setBeat(false);
-    }
+    if (mounted.current) { setSpeechPending(false); setSpeaking(false); setBeat(false); }
+  }
+  function stopSpeech() {
+    resetSpeech();
+    releaseSpeech(speechOwner.current);
   }
   function stopAll() {
     cancelListening();
@@ -192,6 +199,7 @@ export function useBrowserVoice() {
       if (!current() || delivered) return;
       delivered = true;
       recognition.current = null;
+      if (!ownsSpeech(speechOwner.current)) setAudioSession("auto");
       clearListenTimer();
       instance.onresult = instance.onend = instance.onstart = instance.onerror = null;
       instance.onspeechend = null;
@@ -255,6 +263,7 @@ export function useBrowserVoice() {
       cancelListening();
     };
     try {
+      setAudioSession("play-and-record");
       instance.start();
       listenTimer.current = setTimeout(() => {
         if (current()) {
@@ -300,10 +309,17 @@ export function useBrowserVoice() {
     cancelListening();
     stopSpeech();
     setError("");
-    const available = voicesRef.current;
+    claimSpeech(speechOwner.current, resetSpeech);
+    setSpeechPending(true);
+    setSpeechEvent("Locución en cola; esperando al motor");
+    let available = voicesRef.current;
+    try {
+      const refreshed = window.speechSynthesis.getVoices().filter((v) => /^es(?:-|_)/i.test(v.lang) || v.lang === "es");
+      if (refreshed.length) available = refreshed;
+    } catch { /* Cached voice or the native Spanish default remains available. */ }
     const selected =
       available.find((v) => v.voiceURI === prefs.current.voiceURI) ||
-      available.find((v) => /premium|enhanced|mejorada|natural/i.test(v.name)) ||
+      available.find((v) => v.localService && /premium|enhanced|mejorada|natural/i.test(v.name)) ||
       available.find(
         (v) =>
           v.localService &&
@@ -333,57 +349,69 @@ export function useBrowserVoice() {
       chunk += `${word} `;
     }
     if (chunk.trim()) chunks.push(chunk.trim());
+    if (!chunks.length) { stopSpeech(); setError("No hay texto legible para reproducir; la respuesta sigue en pantalla."); return; }
     function next(index: number) {
       if (!mounted.current || !prefs.current.mode || prefs.current.muted)
         return;
-      const item = new SpeechSynthesisUtterance(chunks[index]);
+      let item: SpeechSynthesisUtterance;
+      try { item = new SpeechSynthesisUtterance(chunks[index]); }
+      catch { stopSpeech(); setError("No se pudo abrir la voz del dispositivo; el texto se conserva."); return; }
       item.lang = selected?.lang || "es-ES";
       if (selected) item.voice = selected;
       item.rate = 0.95;
       item.pitch = 1;
+      item.volume = 1;
       utterance.current = item;
-      const current = () => mounted.current && utterance.current === item;
-      item.onstart = () => {
-        if (!current()) return;
-        clearSpeechTimer();
-        setSpeaking(true);
-        speechTimer.current = setTimeout(
-          () => {
-            if (current()) {
-              stopSpeech();
-              setError(
-                "La lectura se detuvo. Pulsa Reproducir respuesta para volver a intentarlo.",
-              );
-            }
-          },
-          Math.max(15000, chunks[index].length * 300),
-        );
-      };
-      item.onboundary = () => {
-        if (current()) setBeat((previous) => !previous);
-      };
-      item.onend = () => {
-        if (!current()) return;
-        clearSpeechTimer();
-        utterance.current = null;
+      const current = () => mounted.current && utterance.current === item && ownsSpeech(speechOwner.current);
+      let started = false, finished = false, idleSamples = 0, startedAt = 0;
+      const finish = () => {
+        if (!current() || finished) return;
+        finished = true;
+        clearSpeechTimer(); utterance.current = null;
         if (index + 1 < chunks.length) next(index + 1);
         else {
-          setSpeaking(false);
-          setBeat(false);
-          completed?.();
+          releaseSpeech(speechOwner.current, false);
+          setSpeechPending(false); setSpeaking(false); setBeat(false);
+          setSpeechEvent("El motor terminó la locución"); completed?.();
         }
       };
+      const markStarted = () => {
+        if (!current() || started) return;
+        started = true; startedAt = Date.now();
+        // Preserve the engine watcher; replace only the start deadline.
+        if (speechTimer.current) clearTimeout(speechTimer.current);
+        setSpeechPending(false); setSpeaking(true);
+        setSpeechEvent("El motor inició la locución");
+        speechTimer.current = setTimeout(() => {
+          if (current()) { stopSpeech(); setSpeechEvent("Lectura interrumpida"); setError("La lectura se detuvo; el texto sigue disponible."); }
+        }, Math.max(15000, chunks[index].length * 300));
+      };
+      item.onstart = markStarted;
+      item.onboundary = () => { if (current()) { markStarted(); setBeat((p) => !p); } };
+      item.onend = finish;
+      // Some WebKit versions omit start/end events. Native engine flags provide
+      // progress evidence, not proof that the device speakers are audible.
+      engineWatch.current = setInterval(() => {
+        if (!current()) return;
+        const synth = window.speechSynthesis;
+        if (synth.speaking === true && synth.paused !== true) { markStarted(); idleSamples = 0; }
+        else if (started && Date.now() - startedAt >= 1000 && synth.speaking === false && synth.pending === false) {
+          if (++idleSamples >= 2) finish();
+        }
+      }, 200);
       item.onerror = () => {
         if (current()) {
           stopSpeech();
+          setSpeechEvent("El motor devolvió un error de voz");
           setError(
             "Safari no pudo reproducir la voz. Pulsa Reproducir respuesta; también puedes leer el texto.",
           );
         }
       };
       speechTimer.current = setTimeout(() => {
-        if (current()) {
+        if (current() && !started) {
           stopSpeech();
+          setSpeechEvent("Sin inicio confirmado del motor");
           setError(
             "El dispositivo no inició la voz. Tu texto se conserva. Pulsa Escuchar última respuesta para reanudar el audio.",
           );
@@ -410,6 +438,8 @@ export function useBrowserVoice() {
     listening,
     starting,
     speaking,
+    speechPending,
+    speechEvent,
     beat,
     error,
     voices,

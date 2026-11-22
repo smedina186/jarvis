@@ -8,7 +8,7 @@ it("never acquires audio before opt-in and releases capture when speech takes ov
   vi.stubGlobal("navigator", { mediaDevices: { getUserMedia: gum } });
   vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
   vi.stubGlobal("cancelAnimationFrame", vi.fn());
-  vi.stubGlobal("AudioContext", class { state = "running"; resume = vi.fn().mockResolvedValue(undefined); close = close;
+  vi.stubGlobal("AudioContext", class { state = "running"; resume = vi.fn().mockResolvedValue(undefined); close = close; suspend = vi.fn().mockResolvedValue(undefined);
     createMediaStreamSource() { return { connect: vi.fn(), disconnect: vi.fn() }; }
     createAnalyser() { return { fftSize: 1024, getFloatTimeDomainData: vi.fn() }; }
   });
@@ -27,10 +27,27 @@ it("releases a permission result that arrives after disabling", async () => {
   let resolve!: (stream: unknown) => void;
   vi.stubGlobal("navigator", { mediaDevices: { getUserMedia: vi.fn(() => new Promise((r) => { resolve = r; })) } });
   vi.stubGlobal("cancelAnimationFrame", vi.fn());
-  vi.stubGlobal("AudioContext", class { state = "running"; resume = vi.fn().mockResolvedValue(undefined); close = vi.fn().mockResolvedValue(undefined); });
+  vi.stubGlobal("AudioContext", class { state = "running"; resume = vi.fn().mockResolvedValue(undefined); close = vi.fn().mockResolvedValue(undefined); suspend = vi.fn().mockResolvedValue(undefined); });
   const { result } = renderHook(() => useDoubleClap(vi.fn(), true));
   act(() => result.current.enable());
   act(() => result.current.disable());
   await act(async () => { resolve({ getTracks: () => [{ stop }] }); });
   expect(stop).toHaveBeenCalled();
+});
+
+it("pause releases the microphone synchronously before a following speech call", async () => {
+  const order: string[] = [];
+  const stop = vi.fn(() => order.push("capture-stopped"));
+  vi.stubGlobal("navigator", { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) } });
+  vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+  vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  vi.stubGlobal("AudioContext", class { state = "running"; resume = vi.fn().mockResolvedValue(undefined); suspend = vi.fn().mockResolvedValue(undefined); close = vi.fn().mockResolvedValue(undefined);
+    createMediaStreamSource() { return { connect: vi.fn(), disconnect: vi.fn() }; }
+    createAnalyser() { return { fftSize: 1024, getFloatTimeDomainData: vi.fn() }; }
+  });
+  const { result } = renderHook(() => useDoubleClap(vi.fn(), true));
+  act(() => result.current.enable());
+  await waitFor(() => expect(result.current.state).toContain("Escuchando dos aplausos"));
+  act(() => { result.current.pause(); order.push("speech-queued"); });
+  expect(order.indexOf("capture-stopped")).toBeLessThan(order.indexOf("speech-queued"));
 });

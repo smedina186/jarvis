@@ -193,7 +193,7 @@ it("cancels microphone and speech on unmount without saving audio", async () => 
   act(() => result.current.listen("", vi.fn()));
   unmount();
   expect(Recognition.instances[0].abort).toHaveBeenCalled();
-  expect(synth.cancel).toHaveBeenCalled();
+  expect(synth.cancel).not.toHaveBeenCalled();
 });
 
 it("speaks readable prose without Markdown symbols or code blocks", async () => {
@@ -247,4 +247,64 @@ it("allows a slow native voice to start without canceling it at three seconds", 
   expect(result.current.error).toBe("");
   act(() => spoken[0].onstart?.());
   expect(result.current.speaking).toBe(true);
+});
+
+it("an idle voice hook cannot cancel speech owned by another section", async () => {
+  const a = renderHook(() => useBrowserVoice());
+  const b = renderHook(() => useBrowserVoice());
+  await waitFor(() => expect(a.result.current.speechSupported).toBe(true));
+  act(() => { a.result.current.setMode(true); a.result.current.speak("Voz del chat"); });
+  const count = synth.cancel.mock.calls.length;
+  act(() => b.result.current.setMode(false));
+  b.unmount();
+  expect(synth.cancel).toHaveBeenCalledTimes(count);
+  act(() => spoken[0].onstart?.());
+  expect(a.result.current.speaking).toBe(true);
+});
+
+it("a new speaker revokes old callbacks without canceling its own replacement", async () => {
+  const a = renderHook(() => useBrowserVoice());
+  const b = renderHook(() => useBrowserVoice());
+  const completed = vi.fn();
+  await waitFor(() => expect(a.result.current.speechSupported).toBe(true));
+  act(() => { a.result.current.setMode(true); a.result.current.speak("Chat", completed); });
+  const old = spoken[0];
+  act(() => { b.result.current.setMode(true); b.result.current.speak("Agente"); });
+  act(() => { old.onstart?.(); old.onend?.(); });
+  expect(completed).not.toHaveBeenCalled();
+  expect(a.result.current.speaking).toBe(false);
+  act(() => spoken[1].onstart?.());
+  expect(b.result.current.speaking).toBe(true);
+});
+
+it("marks queued audio immediately and tolerates missing native start/end events", async () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useBrowserVoice());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  const completed = vi.fn();
+  const native = { ...synth, speaking: true, pending: false, paused: false };
+  vi.stubGlobal("speechSynthesis", native);
+  act(() => { result.current.setMode(true); result.current.speak("Hola", completed); });
+  expect(result.current.speechPending).toBe(true);
+  await act(async () => { await vi.advanceTimersByTimeAsync(12500); });
+  expect(result.current.error).toBe("");
+  expect(result.current.speaking).toBe(true);
+  native.speaking = false;
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  expect(completed).toHaveBeenCalledTimes(1);
+  expect(result.current.speaking).toBe(false);
+});
+
+it("refreshes available voices on playback and restores Safari playback routing", async () => {
+  const session = { type: "play-and-record" };
+  vi.stubGlobal("navigator", { audioSession: session });
+  const { result } = renderHook(() => useBrowserVoice());
+  await waitFor(() => expect(result.current.speechSupported).toBe(true));
+  const improved = { ...spanish, voiceURI: "improved-es", name: "Spanish mejorada" };
+  synth.getVoices.mockReturnValueOnce([improved]);
+  act(() => { result.current.setMode(true); result.current.speak("Prueba"); });
+  expect(spoken[0].voice).toEqual(improved);
+  expect(session.type).toBe("playback");
+  act(() => spoken[0].onend?.());
+  expect(session.type).toBe("auto");
 });

@@ -85,13 +85,13 @@ export default function GeminiConversation({
     onActivity?.(
       voice.listening || voice.starting
         ? "listening"
-        : pending
+        : pending || voice.speechPending
           ? "processing"
           : voice.speaking
             ? "speaking"
             : "idle",
     );
-  }, [voice.listening, voice.starting, voice.speaking, pending, onActivity]);
+  }, [voice.listening, voice.starting, voice.speaking, voice.speechPending, pending, onActivity]);
   useEffect(() => {
     onBeat?.(voice.beat);
   }, [voice.beat, onBeat]);
@@ -138,6 +138,7 @@ export default function GeminiConversation({
       return;
     }
     if (!voice.consent && !window.confirm("¿Permites una conversación por voz? El navegador puede enviar audio a Apple/Google para transcribirlo. El texto se enviará a Gemini al terminar de hablar. JARVIS no guarda grabaciones. La sesión se detiene al salir o tras 6 turnos.")) return;
+    claps.pause();
     voice.setMode(true);
     voice.setConsent(true);
     voice.setMuted(false);
@@ -156,11 +157,12 @@ export default function GeminiConversation({
   }
   const claps = useDoubleClap(
     () => { if (!session.current.active && !active.current) startVoiceLatest.current(); },
-    visible && !automatic && !pending && !voice.speaking && !voice.starting && !voice.listening && !voice.error,
+    visible && !automatic && !pending && !voice.speechPending && !voice.speaking && !voice.starting && !voice.listening && !voice.error,
   );
   function enableClaps() {
     if (!window.confirm("¿Activar dos aplausos? JARVIS mantendrá el micrófono abierto mientras esta página esté visible, durante un máximo de 10 minutos. Los aplausos se analizan en el iPad sin grabarse ni enviarse. Tras activarse, la transcripción puede usar Apple/Google y el mensaje se enviará a Gemini. Los ruidos pueden causar activaciones falsas.")) return;
     voice.setMode(true); voice.setConsent(true); voice.setMuted(false);
+    claps.pause();
     claps.enable();
     voice.speak("Activación por dos aplausos preparada.");
   }
@@ -372,11 +374,13 @@ export default function GeminiConversation({
         setRouting(
           `${data.agent}: ${data.routing_reason || "Selección del orquestador"}`,
         );
-      if (visibleRef.current)
+      if (visibleRef.current) {
+        claps.pause();
         voice.speak(data.text, () => {
           if (session.current.active)
             setTimeout(() => listenLatest.current(), 300);
         });
+      }
       if (data.provider === "gemini")
         onStatus(
           (previous) =>
@@ -425,7 +429,7 @@ export default function GeminiConversation({
           {automatic ? <Square size={22} /> : <Mic size={22} />} {automatic ? "Detener conversación" : "Hablar con JARVIS"}
         </button>
         <p className="voice-help" role="note">{automatic ? "Escucha → Gemini → respuesta hablada. Sesión de hasta 6 turnos." : "Un toque para conversar. También puedes tocar el ojo. Sin escucha en segundo plano."}</p>
-        {lastReply && voice.mode && !voice.speaking && <button type="button" className="jarvis-text-link" onClick={() => voice.speak(lastReply)}>Escuchar última respuesta</button>}
+        {lastReply && voice.mode && !voice.speaking && <button type="button" className="jarvis-text-link" disabled={voice.muted || !voice.speechSupported || pending || voice.speechPending} onClick={() => { claps.pause(); voice.speak(lastReply); }}>Escuchar última respuesta</button>}
       </div>
       <details className="personal-memory"><summary>Activar con dos aplausos · opcional</summary>
         <p className="voice-help">Solo con JARVIS abierto y visible. Detector experimental de sonidos, no identificación de personas. No funciona con la pantalla bloqueada ni distingue perfectamente aplausos de otros golpes.</p>
@@ -520,6 +524,8 @@ export default function GeminiConversation({
       {routing && <p className="voice-help">{routing}</p>}
       {memoryReport && <p className="voice-help">{memoryReport}</p>}
       <details className="voice-settings"><summary>Ajustes de voz y dictado</summary>
+        <button type="button" className="private-button secondary" disabled={automatic || voice.listening || pending || !voice.speechSupported} onClick={() => { claps.pause(); voice.setMode(true); voice.setMuted(false); voice.speak("Esta es una prueba de voz de JARVIS."); }}>Probar voz del dispositivo</button>
+        <p className="voice-help" role="note">{voice.speechEvent}. Esto comprueba el motor del navegador, no el volumen ni la salida Bluetooth.</p>
         <label className="voice-switch">
           <input
             type="checkbox"
@@ -580,7 +586,7 @@ export default function GeminiConversation({
                 disabled={
                   !lastReply || !voice.speechSupported || voice.muted || pending
                 }
-                onClick={() => voice.speak(lastReply)}
+                onClick={() => { claps.pause(); voice.speak(lastReply); }}
               >
                 <Play size={17} /> Reproducir respuesta
               </button>
@@ -648,7 +654,7 @@ export default function GeminiConversation({
             </button>
             <button type="button" className="jarvis-text-link" disabled={pending || automatic || !voice.consent || !voice.supported}
               aria-label={voice.listening || voice.starting ? "Finalizar dictado" : "Iniciar dictado"}
-              onClick={() => voice.listening || voice.starting ? voice.finishListening() : voice.listen(text, setText)}>
+              onClick={() => { if (voice.listening || voice.starting) voice.finishListening(); else { claps.pause(); voice.listen(text, setText); } }}>
               Dictar borrador sin enviar
             </button>
             <p className="voice-help">
@@ -660,7 +666,7 @@ export default function GeminiConversation({
         )}
       </details>
       {automatic && <div className="jarvis-voice-stage" role="status" aria-live="polite">
-        <strong>{voice.listening ? "Te escucho…" : voice.starting ? "Abriendo micrófono…" : pending ? "JARVIS está pensando…" : voice.speaking ? "JARVIS está hablando…" : "Preparando el siguiente turno…"}</strong>
+        <strong>{voice.listening ? "Te escucho…" : voice.starting ? "Abriendo micrófono…" : pending ? "JARVIS está pensando…" : voice.speechPending ? "Preparando voz del dispositivo…" : voice.speaking ? "JARVIS está hablando…" : "Preparando el siguiente turno…"}</strong>
         <p>Al hacer una pausa se envía tu frase, sin pulsar Enviar. Para salir, pulsa Detener conversación.</p>
         {text && <p>He oído: {text}</p>}
       </div>}

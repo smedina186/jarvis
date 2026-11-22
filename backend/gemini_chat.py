@@ -18,6 +18,9 @@ from config import Settings
 from personal_agents import AGENTS, select_agent
 
 FREE_MODEL = "gemini-3.5-flash-lite"
+# Reserve the remaining BFF deadline for Gemini (22 s) and HTTP overhead.
+# Explicit memory mutations keep their own durable operation timeout.
+OPTIONAL_MEMORY_LOOKUP_TIMEOUT_SECONDS = 2.0
 
 
 class ChatMessage(BaseModel):
@@ -356,9 +359,10 @@ class GeminiChat:
                             "provider": "memory",
                             "text": "No se borró nada. Confirma desde Memoria.",
                         }
-                    items = await self.memory_runtime.call(
-                        lambda m: m.recall(request.project, latest)
-                    )
+                    async with asyncio.timeout(OPTIONAL_MEMORY_LOOKUP_TIMEOUT_SECONDS):
+                        items = await self.memory_runtime.call(
+                            lambda m: m.recall(request.project, latest)
+                        )
                     request.memories = [
                         MemorySnippet(
                             title=f"{m['kind']} · {m['source']} · {m['updated_at']}",
@@ -367,13 +371,18 @@ class GeminiChat:
                         for m in items[:5]
                     ]
                     request.memory_index = [m["id"] for m in items[:5]]
-                except Exception:
+                except Exception as exc:
                     if is_memory_command or "recuerdas de" in normalized:
                         return {
                             "provider": "memory",
                             "text": "Memoria no disponible. No se confirmó ninguna operación.",
                         }
-                    memory_warning = "Memoria no disponible; respuesta sin recuerdos del servidor."
+                    memory_warning = (
+                        "La consulta de recuerdos tardó demasiado; "
+                        "respuesta sin recuerdos del servidor."
+                        if isinstance(exc, TimeoutError)
+                        else "Memoria no disponible; respuesta sin recuerdos del servidor."
+                    )
             result = await self.generate(request)
             if memory_warning:
                 result["memory_warning"] = memory_warning

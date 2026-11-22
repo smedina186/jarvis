@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Public commit identifier only. Never expose provider keys via this object.
+  env: { NEXT_PUBLIC_JARVIS_RELEASE: /^[a-f0-9]{40}$/i.test(process.env.COMMIT_REF || "") ? process.env.COMMIT_REF!.slice(0, 12) : "local" },
   async headers() {
     return [{ source: "/:path*", headers: [
       { key: "X-Content-Type-Options", value: "nosniff" },
