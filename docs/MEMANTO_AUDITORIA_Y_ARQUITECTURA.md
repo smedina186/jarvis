@@ -258,3 +258,56 @@ Flujos Playwright: 9 aprobados en Chromium (escritorio, iPhone e iPad emulados).
 Ruff y comprobación de whitespace revisados. No se llamó Gemini, Memanto,
 Moorcheh ni PostgreSQL remoto; las pruebas de esos contratos usan dobles explícitos.
 WebKit/Safari real pendiente por dependencias nativas ausentes en este entorno.
+
+## Conexión autorizada a Neon — 2026-11-22
+
+Se verificó por los conectores oficiales que la organización Neon está en `free`
+y el servicio existente Render `jarvis-fyyr` usa `plan: free`. No se habilitó
+facturación, AI Gateway, Neon Auth, Functions ni otro servicio adicional.
+
+- Proyecto PostgreSQL: `jarvis-memory` (`cool-frog-93550650`), AWS Oregon,
+  PostgreSQL 17, cómputo fijo 0,25 CU y suspensión automática del plan Free.
+- Rama persistente: `production`; rama aislada: `verify-memory-schema`.
+  Son ramas de base de datos, no ramas Git. Ninguna se borró.
+- Cuotas adicionales aceptadas por Neon: 324000 segundos de cómputo (90 CU-h),
+  800000000 bytes de datos y 4000000000 bytes de transferencia. Se detiene al
+  alcanzar la cuota, no se cambia de plan. Ventana de recuperación histórica: 0;
+  exportar es necesario para disponer de copia propia. No hay backup probado.
+- Migración aditiva `backend/migrations/001_durable_state.sql`: aplicada dos veces
+  en rama aislada para verificar idempotencia, después en la base vacía production.
+- Se guardó la preferencia REAL expresada por el propietario sobre presupuesto $0,
+  con estructura generada por MemoryService, procedencia explícita y auditoría.
+  Escritura y recuperación se comprobaron mediante el conector SQL de Neon, en
+  transacciones independientes. ID: `18c42730-919f-45ee-903c-8795e21b75e6`.
+  Las consultas con otro owner/proyecto devolvieron cero filas; eso prueba el filtro
+  SQL, no sustituye las pruebas de autorización HTTP ni demuestra RLS de PostgreSQL.
+- No se usaron recuerdos inventados. No se enviaron conversaciones ni secretos.
+
+La credencial se transfirió del conector Neon al servicio Render existente sin
+imprimirla ni escribirla en archivos locales/Git/Netlify. Se usó merge de variables,
+no reemplazo: `JARVIS_MEMORY_DATABASE_URL` añadida y modos `JARVIS_MEMORY_MODE` y
+`JARVIS_MEMANTO_MODE` permanecen `disabled`. Ninguna clave existente se cambió.
+La conexión directa conserva los timeouts de sesión del driver actual; el runtime
+serializa operaciones. No se sustituyó por un pooler sin verificar su compatibilidad.
+
+**Efecto de la configuración:** update_environment_variables de Render inició
+un despliegue automáticamente. No había solicitado trigger_deploy; el comportamiento
+se detectó y comunicó. Deploy `dep-dc140bbl550s73dbbf20` terminó `live` en el commit
+ya existente `e4ac530`; el anterior era `5292370`. NO se publicaron los commits locales
+de memoria ni se modificó Netlify/main. En adelante, tratar toda actualización de
+variables por este conector como despliegue; reservarla para una publicación aprobada.
+GET anónimos a /api/health, /api/chat y /api/memory/status respondieron 401 tras
+el despliegue. No se hizo una llamada real a Gemini ni una sesión OAuth de prueba.
+
+La preferencia volvió a recuperarse de Neon después del despliegue de Render.
+Esto demuestra independencia del almacenamiento respecto a ese proceso; todavía NO
+prueba la escritura desde el frontend ni que el código desplegado use MemoryService.
+Antes de activar: revisar/publicar la rama preparada, establecer
+`JARVIS_MEMORY_MODE=approved_external` y verificar escritura/lectura autenticadas,
+nueva sesión y reinicio del backend. Ese cambio requiere aprobación de publicación.
+Memanto continúa preparado, sin credencial de Moorcheh ni operaciones remotas.
+
+Validación de esta etapa: 11 pruebas de memoria aprobadas; migración PostgreSQL
+real e idempotente comprobada por Neon. La compilación y suite completa de la etapa
+anterior siguen documentadas; esta etapa solo añade SQL y documentación y no cambia
+el chat, la UI, OAuth ni dependencias. No se repitieron compilaciones sin cambios.
