@@ -176,3 +176,23 @@ def test_owner_can_discover_tool_catalog_but_other_accounts_cannot(monkeypatch, 
         ).status_code
         == 403
     )
+
+
+@pytest.mark.asyncio
+async def test_audited_document_skill_is_real_model_context_and_cannot_change_tools(workflow):
+    runtime, _, _, _ = workflow
+    result = await runtime.run(
+        AgentRun(
+            agent="documents",
+            prompt="Extrae pendientes",
+            document_text="Preparar propuesta para el lunes",
+            skill="todo-from-notes",
+        )
+    )
+    assert result["run"]["skill"] == "todo-from-notes"
+    assert "No inventes plazos" in runtime.gemini.requests[0].messages[0].text
+    assert result["run"]["tools"] == ["document.supplied", "gemini.generate"]
+    with pytest.raises(ValidationError):
+        AgentRun(agent="organization", prompt="Hola", skill="meeting-notes")
+    with pytest.raises(ValidationError):
+        AgentRun(agent="documents", prompt="Hola", document_text="Dato", skill="shell")

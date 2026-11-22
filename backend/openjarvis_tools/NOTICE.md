@@ -11,3 +11,10 @@ Only the Python loop guard is vendored. No package installer, model downloader,
 telemetry, shell, external skills collection or local SQLite scheduler is run.
 JARVIS workflows in runtime.py are integration code, not the upstream orchestrator.
 This is a selective source integration, NOT installation of the full framework.
+
+Additional adapted task templates (translated and bounded for supplied text):
+skills/data/todo-from-notes.toml and skills/data/meeting-notes.toml at the same
+revision. No file_read or think executor is imported; JARVIS routes the reviewed
+instructions to its authorized Gemini generation. Summary is a JARVIS text-only
+workflow, not an installed PDF parser. Browser double-clap detection is a new
+JARVIS heuristic inspired by RMS analysis, not an upstream OpenJarvis feature.

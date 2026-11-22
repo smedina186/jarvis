@@ -37,16 +37,31 @@ PROFILES = {
 }
 
 
+# Adapted task templates from OpenJarvis skills/data, not executable TOML imports.
+SKILLS = {
+    "summary": "Resume únicamente el documento aportado; distingue contenido y datos faltantes.",
+    "todo-from-notes": (
+        "Extrae tareas, prioridades y fechas explícitas de las notas. No inventes plazos."
+    ),
+    "meeting-notes": (
+        "Prepara minuta: temas, decisiones, responsables, acciones y dudas. No inventes asistentes."
+    ),
+}
+
+
 class AgentRun(BaseModel):
     model_config = ConfigDict(extra="forbid")
     agent: Literal["archivist", "organization", "documents"]
     project: str = Field(default="personal", pattern=r"^[a-zA-Z0-9_-]{1,40}$")
     prompt: str = Field(min_length=1, max_length=2000)
     document_text: str = Field(default="", max_length=6000)
+    skill: Literal["free", "summary", "todo-from-notes", "meeting-notes"] = "free"
     use_memory: bool = False
 
     @model_validator(mode="after")
     def safe(self):
+        if self.skill != "free" and self.agent != "documents":
+            raise ValueError("Esta habilidad requiere el agente Documentos")
         no_secrets(self.prompt)
         no_secrets(self.document_text)
         if not self.prompt.strip():
@@ -97,6 +112,7 @@ class AgentRuntime:
                 "agent": request.agent,
                 "project": request.project,
                 "version": "1.0.0",
+                "skill": request.skill,
                 "started_at": now(),
                 "state": "failed",
                 "tools": [],
@@ -153,6 +169,8 @@ class AgentRuntime:
                     "No se guardó ningún plan ni se modificaron "
                     "recuerdos. Pide aprobación para ello."
                 )
+                if request.skill != "free":
+                    prompt += "\nHabilidad auditada: " + SKILLS[request.skill]
                 if request.document_text:
                     # Explicit bounded source, not an arbitrary filesystem path.
                     prompt += (

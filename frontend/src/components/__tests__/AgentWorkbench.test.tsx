@@ -23,3 +23,17 @@ it("keeps failed agent operations visible without inventing successful tools", a
   expect(await screen.findByRole("alert")).toHaveTextContent("Cuota agotada");
   expect(screen.queryByText(/Recibo guardado/)).not.toBeInTheDocument();
 });
+
+it("reads the real protocol result after an explicit run without adding a second model request", async () => {
+  const spoken: { text: string }[] = [];
+  vi.stubGlobal("SpeechSynthesisUtterance", class { constructor(public text: string) {} });
+  vi.stubGlobal("speechSynthesis", { getVoices: () => [], addEventListener: vi.fn(), removeEventListener: vi.fn(), cancel: vi.fn(), resume: vi.fn(), speak: (u: { text: string }) => spoken.push(u) });
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ provider: "gemini", text: "Tu presupuesto es cero.", run: { id: "voice-unit", state: "completed", tools: ["gemini.generate"], memory_ids: [], audit_persisted: true } })));
+  render(<AgentWorkbench />);
+  fireEvent.change(screen.getByLabelText("Procedimiento"), { target: { value: "organization" } });
+  fireEvent.change(screen.getByLabelText("Objetivo del agente"), { target: { value: "Organiza" } });
+  fireEvent.click(screen.getByRole("button", { name: "Ejecutar consulta autorizada" }));
+  await screen.findByText("Tu presupuesto es cero.");
+  expect(spoken.some((u) => u.text.includes("Tu presupuesto es cero."))).toBe(true);
+  expect(fetch).toHaveBeenCalledTimes(1);
+});

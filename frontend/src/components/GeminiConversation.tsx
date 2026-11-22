@@ -17,6 +17,7 @@ import {
   VolumeX,
   Keyboard,
 } from "lucide-react";
+import { useDoubleClap } from "@/hooks/useDoubleClap";
 import { useMemoryVault } from "@/hooks/useMemoryVault";
 import { retrieveMemory } from "@/lib/memory-vault";
 import PersonalMemory from "./PersonalMemory";
@@ -152,6 +153,16 @@ export default function GeminiConversation({
     } else {
       beginTurn();
     }
+  }
+  const claps = useDoubleClap(
+    () => { if (!session.current.active && !active.current) startVoiceLatest.current(); },
+    visible && !automatic && !pending && !voice.speaking && !voice.starting && !voice.listening && !voice.error,
+  );
+  function enableClaps() {
+    if (!window.confirm("¿Activar dos aplausos? JARVIS mantendrá el micrófono abierto mientras esta página esté visible, durante un máximo de 10 minutos. Los aplausos se analizan en el iPad sin grabarse ni enviarse. Tras activarse, la transcripción puede usar Apple/Google y el mensaje se enviará a Gemini. Los ruidos pueden causar activaciones falsas.")) return;
+    voice.setMode(true); voice.setConsent(true); voice.setMuted(false);
+    claps.enable();
+    voice.speak("Activación por dos aplausos preparada.");
   }
   useEffect(() => { startVoiceLatest.current = startVoiceSession; });
   useEffect(() => {
@@ -416,6 +427,12 @@ export default function GeminiConversation({
         <p className="voice-help" role="note">{automatic ? "Escucha → Gemini → respuesta hablada. Sesión de hasta 6 turnos." : "Un toque para conversar. También puedes tocar el ojo. Sin escucha en segundo plano."}</p>
         {lastReply && voice.mode && !voice.speaking && <button type="button" className="jarvis-text-link" onClick={() => voice.speak(lastReply)}>Escuchar última respuesta</button>}
       </div>
+      <details className="personal-memory"><summary>Activar con dos aplausos · opcional</summary>
+        <p className="voice-help">Solo con JARVIS abierto y visible. Detector experimental de sonidos, no identificación de personas. No funciona con la pantalla bloqueada ni distingue perfectamente aplausos de otros golpes.</p>
+        <button type="button" className="private-button secondary" aria-pressed={claps.enabled} onClick={() => claps.enabled ? claps.disable() : enableClaps()}>{claps.enabled ? "Desactivar aplausos" : "Activar dos aplausos"}</button>
+        <p className="voice-help" aria-live="polite">{claps.state}</p>
+        {claps.error && <p role="alert" className="gemini-error">{claps.error}</p>}
+      </details>
       <details className="personal-memory">
         <summary>Misiones y revisión diaria</summary>
         <p className="voice-help">
