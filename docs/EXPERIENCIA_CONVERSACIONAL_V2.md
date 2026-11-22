@@ -94,3 +94,33 @@ Las pruebas de audio siguen siendo fixtures; falta comprobar la secuencia físic
 en Safari/iPadOS. Un navegador que bloquee reproducción o reapertura del micrófono
 puede seguir requiriendo un gesto explícito; no se promete comportamiento de Siri
 con la pantalla bloqueada.
+
+## Inicio de audio desde el gesto y conservación del texto
+
+La captura del propietario mostró un timeout de inicio de síntesis. Antes, la
+primera reproducción se intentaba después de esperar la respuesta HTTP de Gemini.
+Ahora se encola un saludo audible «Te escucho» dentro de la pulsación inicial,
+antes de cualquier await de red. El micrófono solo se abre al finalizar ese saludo,
+para evitar captar la propia voz. Todos los botones de sesión usan esta ruta.
+No se utiliza audio silencioso ni se eluden permisos del navegador.
+
+El timeout de inicio era de tres segundos: se amplió a doce para no cancelar una
+voz nativa que tarda en cargar. Un timeout o error sigue visible, no se presenta
+como reproducción verificada. onspeechend permite cerrar el turno con una espera
+de 500 ms para resultados finales; si el motor no lo emite, continúa el fallback
+de transcripción estable de 1,8 s. La cancelación invalida ambos caminos.
+
+El mensaje del propietario se incorpora al chat ANTES de consultar Gemini. Si
+falla el transporte, permanece visible y el borrador se conserva para reintentar.
+Los turnos fallidos no se envían como historial incompleto ni duplicado. La lectura
+fallida tampoco elimina mensajes. Esto no es historial persistente: solo dura la
+pestaña actual. La memoria semántica en Neon sigue teniendo su consentimiento y
+operaciones explícitas; no se archivan automáticamente todas las conversaciones.
+
+Validación de esta corrección: 68 pruebas frontend, compilación y TypeScript
+correctos, ESLint sin errores. Nueve pruebas Playwright aprobadas en Chromium
+(escritorio, iPhone e iPad emulados). El flujo de propietario verifica ahora dos
+turnos de voz automáticos sin clic en Enviar y sin segundo clic en el micrófono,
+con reconocimiento que deliberadamente no emite end y síntesis controlada por
+fixtures. Las pruebas externas de Safari/iPadOS real siguen pendientes: no se
+certifica eliminar todas las restricciones de audio del sistema operativo.

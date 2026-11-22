@@ -12,6 +12,7 @@ interface Recognition {
   continuous: boolean;
   interimResults: boolean;
   onstart: (() => void) | null;
+  onspeechend?: (() => void) | null;
   onend: (() => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onresult: ((event: { results: Results }) => void) | null;
@@ -67,6 +68,7 @@ export function useBrowserVoice() {
       instance.onresult = null;
       instance.onerror = null;
       instance.onstart = null;
+      instance.onspeechend = null;
       try {
         instance.abort();
       } catch {
@@ -192,6 +194,7 @@ export function useBrowserVoice() {
       recognition.current = null;
       clearListenTimer();
       instance.onresult = instance.onend = instance.onstart = instance.onerror = null;
+      instance.onspeechend = null;
       if (stop) { try { instance.stop(); } catch { /* Already ended. */ } }
       setStarting(false);
       setListening(false);
@@ -216,6 +219,13 @@ export function useBrowserVoice() {
           .join(" ")
           .slice(0, 6000),
       );
+    };
+    instance.onspeechend = () => {
+      if (completed && lastTranscript && current()) {
+        if (silenceTimer.current) clearTimeout(silenceTimer.current);
+        // Let final transcript corrections arrive before ending capture.
+        silenceTimer.current = setTimeout(() => deliver(true), 500);
+      }
     };
     instance.onend = () => {
       deliver();
@@ -304,7 +314,8 @@ export function useBrowserVoice() {
       ) ||
       available.find((v) => v.localService) ||
       available[0];
-    // Short utterances avoid Safari dropping long responses. No silent unlock audio.
+    // Short utterances avoid Safari dropping long responses.
+    // The session greeting is audible and originates from the explicit user tap.
     const chunks: string[] = [];
     let chunk = "";
     for (const word of text
@@ -374,10 +385,10 @@ export function useBrowserVoice() {
         if (current()) {
           stopSpeech();
           setError(
-            "Safari puede requerir un toque para iniciar el audio. Pulsa Reproducir respuesta.",
+            "El dispositivo no inició la voz. Tu texto se conserva. Pulsa Escuchar última respuesta para reanudar el audio.",
           );
         }
-      }, 3000);
+      }, 12000);
       try {
         window.speechSynthesis.resume();
         window.speechSynthesis.speak(item);

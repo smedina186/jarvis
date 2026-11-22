@@ -38,7 +38,7 @@ test("local owner test session connects to FastAPI and can sign out", async ({ p
     Object.defineProperty(window, "speechSynthesis", { configurable: true, value: {
       getVoices: () => [{ voiceURI: "test-es", lang: "es-ES", name: "Jorge", localService: true }],
       addEventListener() {}, removeEventListener() {}, cancel() {}, resume() {},
-      speak(item: { onstart?: () => void }) { w.__voiceSpeakCount = Number(w.__voiceSpeakCount) + 1; queueMicrotask(() => item.onstart?.()); },
+      speak(item: { onstart?: () => void; onend?: () => void }) { w.__voiceSpeakCount = Number(w.__voiceSpeakCount) + 1; w.__finishVoice = () => item.onend?.(); queueMicrotask(() => item.onstart?.()); },
     } });
   });
   await page.goto("/");
@@ -91,6 +91,17 @@ test("local owner test session connects to FastAPI and can sign out", async ({ p
   expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__voiceSpeakCount)).toBe(1);
   await page.getByRole("button", { name: "Detener voz" }).click();
   await expect(page.locator(".jarvis-eye-scene")).toHaveAttribute("data-activity", "idle");
+  // Explicit user gesture queues the audible greeting before any AI request.
+  await page.getByRole("button", { name: "Hablar con JARVIS", exact: true }).click();
+  expect(generated).toBe(2);
+  await page.evaluate(() => (window as unknown as { __finishVoice: () => void }).__finishVoice());
+  // Safari fixture deliberately never ends recognition: silence must submit once.
+  await expect.poll(() => generated).toBe(3);
+  await expect(page.locator(".jarvis-eye-scene")).toHaveAttribute("data-activity", "speaking");
+  await page.evaluate(() => (window as unknown as { __finishVoice: () => void }).__finishVoice());
+  await expect.poll(() => generated).toBe(4);
+  await page.getByRole("button", { name: "Detener conversación", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Hablar con JARVIS", exact: true })).toBeVisible();
   await page.getByRole("switch", { name: "Modo voz" }).click();
   await page.getByRole("button", { name: "Conexiones" }).click();
   await expect(page.getByRole("heading", { name: "Conexiones" })).toBeVisible();

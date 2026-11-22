@@ -32,6 +32,8 @@ type Message = {
   role: "user" | "assistant";
   text: string;
   provider?: "gemini" | "memory";
+  id?: number;
+  state?: "pending" | "failed" | "done";
 };
 interface Props {
   status: GeminiStatus | null;
@@ -59,6 +61,7 @@ export default function GeminiConversation({
   );
   const [automatic, setAutomatic] = useState(false);
   const session = useRef({ active: false, turns: 0 });
+  const turnNumber = useRef(0);
   const sendLatest = useRef<
     (text?: string, agent?: string, review?: boolean) => Promise<void>
   >(async () => {});
@@ -126,6 +129,7 @@ export default function GeminiConversation({
   const startVoiceLatest = useRef<() => void>(() => {});
   function startVoiceSession() {
     if (automatic) { stopConversation(); active.current?.abort(); return; }
+    if (wait) { setError(`Espera ${wait} segundos antes de iniciar otro turno.`); return; }
     if (!voice.supported) {
       input.current?.focus();
       setError("Safari no ofrece reconocimiento directo aquí. Pulsa el micrófono del teclado del iPad para dictar; JARVIS puede leer la respuesta con Modo voz.");
@@ -139,7 +143,15 @@ export default function GeminiConversation({
     session.current = { active: true, turns: 0 };
     setAutomatic(true);
     setError("");
-    beginTurn();
+    if (voice.speechSupported) {
+      // First speech is queued in the actual click handler, before any network await.
+      // Mic starts only after the audible greeting, so JARVIS cannot hear itself.
+      voice.speak("Te escucho.", () => {
+        if (session.current.active) listenLatest.current();
+      });
+    } else {
+      beginTurn();
+    }
   }
   useEffect(() => { startVoiceLatest.current = startVoiceSession; });
   useEffect(() => {
@@ -254,7 +266,12 @@ export default function GeminiConversation({
     const deadline = setTimeout(() => controller.abort(), 28000);
     setPending(true);
     setError("");
-    let context = messages.slice(-18).map(({ role, text }) => ({ role, text }));
+    const turn = ++turnNumber.current;
+    let context = messages.filter((m) => m.state !== "failed" && m.state !== "pending").slice(-18).map(({ role, text }) => ({ role, text }));
+    setMessages((previous) => [
+      ...previous.filter((m) => !(m.state === "failed" && m.text === prompt)),
+      { role: "user" as const, text: prompt, id: turn, state: "pending" as const },
+    ].slice(-40));
     while (
       context.length &&
       context.reduce((n, m) => n + m.text.length, prompt.length) > 24000
@@ -315,8 +332,7 @@ export default function GeminiConversation({
         throw new Error("Respuesta de Gemini inválida.");
       setMessages((previous) =>
         [
-          ...previous,
-          { role: "user" as const, text: prompt },
+          ...previous.map((m) => m.id === turn ? { ...m, state: "done" as const } : m),
           {
             role: "assistant" as const,
             text: data.text,
@@ -366,6 +382,8 @@ export default function GeminiConversation({
         );
     } catch (cause) {
       session.current.active = false;
+      setAutomatic(false);
+      setMessages((previous) => previous.map((m) => m.id === turn ? { ...m, state: "failed" } : m));
       if (active.current !== controller) return;
       const message = controller.signal.aborted
         ? "Solicitud detenida o tiempo de espera agotado. No se reintentará sola."
@@ -569,13 +587,7 @@ export default function GeminiConversation({
                   !voice.speechSupported ||
                   pending
                 }
-                onClick={() => {
-                  voice.setMode(true);
-                  session.current = { active: true, turns: 0 };
-                  setAutomatic(true);
-                  setError("");
-                  beginTurn();
-                }}
+                onClick={startVoiceSession}
               >
                 Iniciar conversación automática
               </button>
@@ -666,6 +678,7 @@ export default function GeminiConversation({
                     : "JARVIS · Gemini"}
               </strong>
               <p>{message.text}</p>
+              {message.role === "user" && message.state === "failed" && <p className="voice-help">Texto conservado. No se recibió respuesta; puedes volver a enviarlo desde el cuadro de mensaje.</p>}
             </article>
           ))}
         </div>
@@ -752,7 +765,7 @@ export default function GeminiConversation({
       </div>
       <p className="gemini-privacy">
         Solo al enviar se comparte con Google el mensaje y contexto reciente.
-        Conversación en memoria de esta pestaña; no se guarda al recargar.
+        Texto conservado en esta pestaña, incluso si falla la voz. No es memoria permanente: al recargar se pierde el chat; los recuerdos explícitos se guardan por separado.
         Detener cancela la espera; Google puede haber recibido la solicitud.
       </p>
       {messages.length > 0 && (

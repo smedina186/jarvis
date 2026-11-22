@@ -317,6 +317,9 @@ it("can dictate without Render and sends an automatic turn only after explicit s
   fireEvent.click(
     screen.getByRole("button", { name: "Iniciar conversación automática" }),
   );
+  expect(Recognition.instances).toHaveLength(0);
+  expect(spoken[0].text).toBe("Te escucho.");
+  act(() => { spoken[0].onstart?.(); spoken[0].onend?.(); });
   const first = Recognition.instances[0];
   act(() => {
     first.onstart?.();
@@ -336,10 +339,10 @@ it("can dictate without Render and sends an automatic turn only after explicit s
     JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string).messages[0]
       .text,
   ).toBe("buenos días");
-  await waitFor(() => expect(spoken).toHaveLength(1));
+  await waitFor(() => expect(spoken).toHaveLength(2));
   act(() => {
-    spoken[0].onstart?.();
-    spoken[0].onend?.();
+    spoken[1].onstart?.();
+    spoken[1].onend?.();
   });
   await waitFor(() => expect(Recognition.instances).toHaveLength(2));
   expect(fetch).toHaveBeenCalledTimes(1);
@@ -429,4 +432,19 @@ it("opens a voice session from one explicit tap and honors rejected consent", as
   fireEvent.click(screen.getByRole("button", { name: "Detener conversación" }));
   expect(instances[0].abort).toHaveBeenCalledTimes(1);
   vi.restoreAllMocks();
+});
+
+it("retains the owner's text before a failed request and excludes failed turns from retry context", async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ error: "Sin conexión" }, { status: 503 }))
+    .mockResolvedValueOnce(Response.json({ provider: "gemini", text: "Ahora sí recibí tu frase." }));
+  render(<GeminiConversation status={status} onStatus={vi.fn()} />);
+  const draft = screen.getByRole("textbox", { name: "Mensaje a JARVIS" });
+  fireEvent.change(draft, { target: { value: "No pierdas esta frase" } });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar mensaje a Gemini" }));
+  expect(await screen.findByText(/Texto conservado. No se recibió respuesta/)).toBeInTheDocument();
+  expect(draft).toHaveValue("No pierdas esta frase");
+  expect(screen.getByText("No pierdas esta frase", { selector: "p" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Enviar mensaje a Gemini" }));
+  await screen.findByText("Ahora sí recibí tu frase.");
+  expect(JSON.parse(vi.mocked(fetch).mock.calls[1][1]?.body as string).messages).toEqual([{ role: "user", text: "No pierdas esta frase" }]);
 });

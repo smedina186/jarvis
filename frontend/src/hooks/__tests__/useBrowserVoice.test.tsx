@@ -178,9 +178,9 @@ it("offers a clear manual playback fallback when Safari blocks delayed speech", 
   act(() => result.current.setMode(true));
   act(() => result.current.speak("Hola"));
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(12000);
   });
-  expect(result.current.error).toContain("Pulsa Reproducir respuesta");
+  expect(result.current.error).toContain("Tu texto se conserva");
   expect(result.current.speaking).toBe(false);
 });
 it("cancels microphone and speech on unmount without saving audio", async () => {
@@ -235,4 +235,16 @@ it("does not send a transcript after the owner cancels during the silence window
   act(() => result.current.cancelListening());
   await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
   expect(completed).not.toHaveBeenCalled();
+});
+
+it("allows a slow native voice to start without canceling it at three seconds", async () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useBrowserVoice());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+  act(() => result.current.setMode(true));
+  act(() => result.current.speak("Te escucho."));
+  await act(async () => { await vi.advanceTimersByTimeAsync(3500); });
+  expect(result.current.error).toBe("");
+  act(() => spoken[0].onstart?.());
+  expect(result.current.speaking).toBe(true);
 });
